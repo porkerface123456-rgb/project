@@ -1,0 +1,997 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⭐️ 星星老師陪你讀_專屬學習導航</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .fade-in {
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .snap-btn.selected {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            border-color: #2563eb; /* blue-600 */
+        }
+        /* Toast Notification Styles */
+        #toast-container {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 50;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .toast {
+            background-color: #fee2e2; /* red-100 */
+            border-left: 4px solid #ef4444; /* red-500 */
+            color: #b91c1c; /* red-700 */
+            padding: 16px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            transform: translateX(100%);
+            opacity: 0;
+            transition: all 0.3s ease-in-out;
+        }
+        .toast.show {
+            transform: translateX(0);
+            opacity: 1;
+        }
+        .error-highlight {
+            background-color: #fef2f2 !important; /* red-50 */
+            border: 2px solid #ef4444 !important; /* red-500 */
+            transition: all 0.3s ease;
+        }
+
+        /* 隱藏數字輸入框上下微調箭頭 */
+        input::-webkit-outer-spin-button,
+        input::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        input[type=number] {
+            -moz-appearance: textfield;
+        }
+    </style>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50 min-h-screen flex flex-col font-sans text-gray-800">
+
+    <!-- Header -->
+    <header class="bg-white shadow-sm p-4 sticky top-0 z-10 border-b-4 border-yellow-400">
+        <div class="max-w-4xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-blue-700 flex items-center gap-2">
+                <span class="text-3xl">⭐️</span> 星星老師陪你讀
+            </h1>
+            <p class="text-sm text-gray-500 font-medium hidden sm:block">培養帶得走的「自學力」</p>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-grow p-4 sm:p-8" id="app-container">
+        <!-- Views will be injected here -->
+    </main>
+
+    <!-- Toast Notification Container -->
+    <div id="toast-container"></div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-100 text-center p-4 mt-auto">
+        <p class="text-sm text-gray-500">© 2026 星星老師陪你讀. All rights reserved. 僅為教育概念原型展示。</p>
+    </footer>
+
+<script>
+    // --- State Management ---
+    const subjectMap = {
+        chinese: '國文', english: '英文', math: '數學',
+        biology: '生物', physics: '物理', chemistry: '化學', earth_science: '地科',
+        history: '歷史', geography: '地理', civics: '公民'
+    };
+
+    // ⭐️ 核心知識庫 (Knowledge Base)
+    const knowledgeBase = {
+        e: { // 國小 (Elementary)
+            core: [
+                "**【星星老師心法：搶救閱讀理解，排除學習障礙】**：許多孩子全科落後的原因在於「看不懂題目」這種最基礎的障礙。在算數學或看自然社會題目時，我強烈建議要求孩子「出聲朗讀」並親手「圈出關鍵字」（如：剩下、總共、不正確）。這能強迫大腦減速，有效矯正漏字、跳行或看錯字的粗心問題，讓學習過程先順暢起來。",
+                "**【星星老師心法：拒絕假性努力，從輸出獲得成就感】**：孩子常坐在書桌前放空，大腦並未運轉。請試著採用「費曼學習法（小學版）」，讀完一段課文後必須闔上書，用自己的話把學到的內容「教」給家長聽。當孩子能流暢說出時，那種『我懂了』的小小成就感，是建立自信與耐挫力的最佳燃料。"
+            ],
+            subjects: {
+                chinese: "**【國語：建立語感與基礎】回歸課本與雙向閱讀。** 星星老師提醒，先確保生字、字音、字形、部首絕對熟悉，從「念懂課文」開始。平常可透過「對話式閱讀」訓練，唸故事中途停下來問「你覺得接下來會怎樣？」引導孩子從被動接收轉為主動思考。",
+                english: "**【英語：從生活找成就感】建立語感與生活連結。** 國小階段切忌死背單字！結合發音記單字、結合生活周遭事物練習，重點在於引發興趣與「開口唸」。在街上的招牌找認識的單字，從小地方獲得成功經驗。",
+                math: "**【數學：排除抽象障礙】鞏固計算與具象化。** 第一步務必將基本計算（九九乘法、直式）練到反射動作。遇到應用題卡關，請教孩子「畫圖」將題目具象化，絕對不要憑空想像。錯誤是學習的一部份，算錯了擦掉再畫一次就好！",
+                biology: "**【自然：激發主動探究】連結生活經驗。** 國小自然是培養好奇心的關鍵。引導孩子從生活中的現象（如觀察盆栽、磁鐵）出發。星星老師最喜歡問：「為什麼會這樣？」鼓勵孩子自己找答案，避免死背名詞。",
+                physics: "**【自然：激發主動探究】連結生活經驗。** 引導孩子從生活中的物理現象（如磁鐵、浮力）出發，激發好奇心。多問「為什麼會這樣？」，避免死背專有名詞。",
+                chemistry: "**【自然：激發主動探究】連結生活經驗。** 引導孩子從生活現象（如溶解、燃燒）出發，激發好奇心，避免死背專有名詞。",
+                earth_science: "**【自然：激發主動探究】連結生活經驗。** 結合天氣觀察、星空或戶外石頭地形，激發科學探究的興趣。",
+                history: "**【社會：趣味化記憶】聽故事與連結生活。** 把歷史當作「故事」來聽，建立基礎的時代感；將地理結合家庭出遊經驗，建立空間感。利用 5W1H (人、事、時、地、物) 幫助孩子自己抓出課文重點，而不是幫他畫好線。",
+                geography: "**【社會：趣味化記憶】聽故事與連結生活。** 將地理結合家庭出遊或看地圖的經驗，建立基礎的空間感。也可利用 5W1H 幫助孩子自己抓重點。",
+                civics: "**【社會：從常規建構】從常規建立概念。** 從班級常規、家庭規則出發，理解群體生活的基礎概念與道德規範。"
+            },
+            behavior: {
+                inattention: "**【星星老師專注力提案】視覺降噪與拆解任務**：專注力問題常與大腦前額葉未成熟有關。桌上「只能有」當下正在寫的作業，排除環境干擾。善用「視覺化計時器」，將作業拆成 15-20 分鐘的兒童版番茄鐘，完成一項就休息 5 分鐘，創造『打勾』的多巴胺成就感，慢慢拉長專注時間。",
+                hyper_oppo: "**【星星老師情緒提案】溫和堅定的自然後果法**：約定雷打不動的就寢時間，時間一到，沒寫完也必須收起來。家長請穩住情緒「不心軟代寫、不說教」，讓孩子隔天自己去學校面對老師，親自體驗沒完成任務的自然後果，並學會為自己的行為負責。"
+            },
+            parent_mindset: "**【星星老師給神隊友的話】讚美過程，放低標準**：請設定具體的 SMART 微小目標。只要孩子展現努力，就大力稱讚其「過程」，幫孩子找回學習掌控感。習慣改變需要時間，只要今天比昨天少拖拉 10 分鐘，就是巨大的成功！"
+        },
+        j: { // 國中 (Junior High)
+            core: [
+                "**【星星老師心法：落實主動回想，建立專屬錯題本】**：國中課業繁重，不能單靠小學的死背。星星老師常說，讀完書後不要只是被動看課本畫重點，必須蓋上書本默寫架構。同時，建立專屬「錯題本」，寫下「當時為什麼想錯」與「正確邏輯」，直球面對自己的劣勢，這才是真正的學習。",
+                "**【星星老師心法：自主破解素養題與精力管理】**：面對 108 課綱長篇素養題，孩子必須成為學習主導者。先看問題再找線索，冷靜解讀多模態圖表。此外，國中生體力消耗大，熬夜讀書效率極差。寧可晚上早點就寢，確保白天上課時間有精神聽講。「上課全神貫注聽懂 10 分鐘，勝過回家自己疲勞苦讀 1 小時」。"
+            ],
+            subjects: {
+                chinese: "**【國文：主動閱讀與語感】拒絕死背翻譯。** 文言文比例大增，請試著自己去推敲「文章背景與作者心境」，熟記常考的實、虛詞。建議每天保持 15 分鐘閱讀長篇文章的習慣，培養語感與抓重點能力，這是國中生必備的自學力。",
+                english: "**【英文：情境記憶與時間線】結合發音記單字，結合情境記文法。** 單字量暴增，切忌死背字母！務必唸出聲音並搭配「例句」記憶。學習時態文法時，老師不會直接給你答案，請你自己試著在紙上畫出「時間線」，徹底理解動作發生的先後順序。",
+                math: "**【數學：訓練表達與推導】重視推導過程，捨棄題海戰術。** 從算術進入高度抽象的代數與幾何。準備計算紙，要求自己將每一個算式「條理分明地寫下來」以找出邏輯斷點。放掉艱澀難題，先將課本「基本例題」算到滾瓜爛熟。",
+                biology: "**【生物：視覺化學習法】動手繪製比較表格。** 名詞極度繁雜。嚴禁只讀純文字！幫助自己選擇適合的工具，例如自己動手畫圖、畫表格來比較（如動植物細胞比對），將零碎的記憶結構化。",
+                physics: "**【理化：探究物理意義】弄懂定義與單位。** 概念抽象且計算多。理化不要瞎背公式，務必自己去理解公式背後的物理意義（例如密度的單位怎麼來的），並多利用生活實例來聯想，培養主動探究的精神。",
+                chemistry: "**【理化：探究科學規律】弄懂定義與單位。** 化學反應與元素特性需要理解而非死背。務必理解公式背後的意義，多問自己為什麼，避免成為被動的知識接收者。",
+                earth_science: "**【地科：宏觀圖表解讀】自主邏輯判讀。** 多利用圖表理解天文與地質現象。建立宏觀的系統觀念，學會自己看懂天氣圖與星空圖的相對關係，這對未來的素養題非常有幫助。",
+                history: "**【歷史：建構專屬時間軸】建構架構大於背誦細節。** 歷史科資訊量龐大。星星老師強烈建議：自己動手畫「時間軸」，釐清因果關係，並養成定期回顧這份專屬筆記的習慣。",
+                geography: "**【地理：空間地圖解碼】地圖是唯一的解藥。** 搭配「地圖」來理解氣候、地形與產業的因果關係。千萬不要脫離地圖去死背，要學會自己從圖表中找出地理規律。",
+                civics: "**【公民：連結時事與生活】從生活學社會。** 內容涉及法律與經濟。請多與「生活新聞、時事」連結，善用樹狀圖統整中央與地方政府職權等概念，學會將知識應用在真實世界。"
+            },
+            behavior: {
+                inattention: "**【星星老師專注力提案】數位干擾管理與任務啟動**：讀書時手機必須完全離開視線。面對長篇題目容易分心時，建議採用「先看題目，再找線索」的策略，讓大腦啟動具備目標導向的「任務模式」，學會自己對抗分心。",
+                hyper_oppo: "**【星星老師情緒提案】接納青春期的無力感**：國中生常表現出「我不在乎」的態度，通常是怕自己其實很笨的防禦機制。面對錯誤與挫折，請容許自己有容錯空間。建立討論機制，冷靜下來後再找出解決方案。"
+            },
+            parent_mindset: "**【星星老師給神隊友的話】從指導者退位成合夥人**：國小的盯功課模式已不適用！請不要直接幫孩子訂計畫，而是帶領他們自己訂。試著用討論的方式（如：「你覺得計畫哪裡需要微調？」），把學習決定權交還給孩子。看見分數以外的亮點，守護孩子的自尊心。"
+        },
+        s: { // 高中 (Senior High)
+            core: [
+                "**【星星老師心法：資源管理，奉行一本書主義】**：高中知識量暴增，買越多參考書、報越多補習班，反而每一本都寫不完，挫折感更重。星星老師強調，每個科目「只留一本最適合自己程度的講義」，讀通、讀透三遍，遠勝過把三本書各翻過一遍。先確保 100% 掌握基礎觀念題。",
+                "**【星星老師心法：能量管理與高階輸出】**：因補習熬夜，白天去學校神遊，是高中最致命的循環。請強迫設定「停損睡眠時間」，把握白天在校的黃金聽講期。此外，真正的學習是「空白回想」：讀完一個段落，立刻蓋上書本，試著用自己的話或推導把觀念寫下來，寫不出來就代表沒看懂。"
+            ],
+            subjects: {
+                chinese: "**【國文：思想脈絡與邏輯】掌握思想流派，從背誦轉向語感。** 學測考的是語文邏輯與素養。讀古文必須了解作者政治處境與哲學派別（如儒家、道家）；現代文需訓練「抓主旨」的掃描能力，學會有條理地表達對文本的看法。",
+                english: "**【英文：高階語感與上下文推敲】背誦搭配詞 (Collocations)。** 絕對不能停留在死背字母。請改背「搭配詞」，了解單字在句子中跟誰連用。每天閱讀 1-2 篇長文，學會從上下文「猜測字義」，這是終身受用的自學語言能力。",
+                math: "**【數學：抽象具象化與自我推導】重視推導，凡事「畫圖」。** 高度抽象化。看到函數或幾何題，第一步絕對是自己「畫圖」具象化。千萬不要死背題型，試著自己在白紙上推導公式（如：為何 sin²+cos²=1），體驗『原來如此』的成就感。",
+                biology: "**【生物：建立專屬系統架構】建立系統與流程觀念。** 高中生物細節極多，全背在一起會混亂。必須學會自己用「系統」來讀（如人體循環系統），並強烈建議自己設計大表格來比較差異，這是非常重要的高階筆記技巧。",
+                physics: "**【物理：直擊物理本質】先懂物理情境，再列算式。** 把物理當純數學算，瘋狂刷題是行不通的。解題前，請先在腦海想像物體運動畫面。自己畫對「受力分析圖（力圖）」，這考驗你對物理意義的真實理解，畫對就等於解完一半。",
+                chemistry: "**【化學：掌握微觀規律】掌握微觀世界的規律。** 不要把化學當文科死背。核心觀念是「電子怎麼跑」。自己去歸納元素週期表背後的規律，用規律去推敲化學鍵與反應方程式，享受自主找出邏輯的樂趣。",
+                earth_science: "**【地科：跨域整合與圖表判讀】巨觀的物理與化學。** 地科是跨領域學科。建立系統觀念，多練習圖表與空間邏輯的判讀。不要等老師解釋，自己先試著看懂複雜的氣候與天文圖表，並善用大表格比較差異。",
+                history: "**【歷史：宏觀比較與批判】採用橫向跨域與比較。** 放棄直線流水帳死背。學會自己去比較「同時期東西方在幹嘛？」或是分析經濟史。這能培養你強大的批判性思考，學會比較不同時代、國家的政策差異與因果關係。",
+                geography: "**【地理：空間邏輯與 GIS 應用】地理就是空間的科學。** 讀地理手邊一定要有地圖。所有的氣候、洋流、地形都會影響當地產業。學會自己解讀 GIS 系統圖表、人口金字塔，將課本知識與全球時事結合是拿分關鍵。",
+                civics: "**【公民：精確定義與法理邏輯】熟記專有名詞與法理邏輯。** 涉及經濟學（如供給需求曲線）、法律學與社會學。必須精確定義每個專有名詞（如：GDP 到底包含什麼）。學會用這些理論去分析真實社會新聞，讓知識活起來。"
+            },
+            behavior: {
+                inattention: "**【星星老師專注力提案】應對高度抽象化的神遊**：高中知識難度高，遇到卡關容易挫折神遊。這時請發揮『耐挫力』：先跳過或尋求協助，別耗在同一題消磨意志。將大目標拆解成小範圍進度，自己掌控節奏，專注於當下的任務。",
+                hyper_oppo: "**【星星老師策略提案】減少補習，增加消化時間**：如果在學校聽不懂，下課再去補習班聽 3 小時只會讓大腦更疲乏。勇敢減少補習，增加自己思考與消化的時間，找回學習的主導權，並透過運動等方式釋放壓力。"
+            },
+            parent_mindset: "**【星星老師給神隊友的話】容許陣痛期，退居幕後不強迫**：從國中轉換到高中的讀書方法，需要幾個月甚至半年的適應期。這段時間請看重「讀書習慣的改變」，而非眼前的分數。請完全退居幕後擔任支持者，老師和家長都只是引路人，孩子才是主角。"
+        }
+    };
+
+    const state = {
+        currentStep: 0,
+        data: {
+            role: '', 
+            name: '',
+            grade: '', 
+            zone: '',
+            email: '',
+            phone: '',
+            subjects: {}, 
+            snap: Array(26).fill(null)
+        }
+    };
+
+    const inattentionQs = [
+        "1. 無法專注於細節的部份，或在做學校作業或其他的活動時，出現粗心的錯誤",
+        "2. 很難持續專注於工作或遊戲活動",
+        "3. 看起來好像沒有在聽別人對他（她）說話的內容",
+        "4. 無法遵循指示，也無法完成功課或家事",
+        "5. 組織規劃工作及活動有困難",
+        "6. 逃避，或表達不願意，或有困難於需要持續性動腦的工作",
+        "7. 會弄丟工作上或活動所必需的東西",
+        "8. 很容易受外在刺激影響而分心",
+        "9. 在日常生活中忘東忘西的"
+    ];
+    
+    const hyperQs = [
+        "10. 在座位上玩弄手腳或不好好坐著",
+        "11. 在教室或是其他必須持續坐著的場合，會任意離開座位",
+        "12. 在不適當的場合，亂跑或爬高爬低",
+        "13. 很難安靜地玩或參與休閒活動",
+        "14. 總是一直在動或是像被馬達所驅動",
+        "15. 話很多",
+        "16. 在問題還沒問完前就急著回答",
+        "17. 在遊戲中或團體活動中，無法排隊或等待輪流",
+        "18. 打斷或干擾別人（例如：插嘴或打斷別人的遊戲）"
+    ];
+
+    const oppoQs = [
+        "19. 發脾氣",
+        "20. 與大人爭論",
+        "21. 主動地反抗或拒絕大人的要求或規定",
+        "22. 故意地做一些事去干擾（激怒）別人",
+        "23. 因自己犯的錯或不適當的行為而怪罪別人",
+        "24. 易怒的或很容易被別人激怒",
+        "25. 生氣的及怨恨的",
+        "26. 惡意的或有報復心的"
+    ];
+
+    function showToast(message) {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        toast.className = 'toast';
+        toast.innerHTML = `
+            <span class="text-xl">⚠️</span>
+            <div class="font-medium">${message}</div>
+        `;
+        container.appendChild(toast);
+        
+        setTimeout(() => toast.classList.add('show'), 10);
+        setTimeout(() => {
+            toast.classList.remove('show');
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    }
+
+    // 🌟 自動發送個人資料與學科成績至 Google Sheet
+    function sendToGoogleSheet(data) {
+        const GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxeF4MMa3h_dmOXEa_lQ9OtWhG0XEtLvxQFILCkVsI02K0N5fVp43SmO9rdEnzzyud4/exec";
+
+        const payload = {
+            timestamp: new Date().toLocaleString("zh-TW", { timeZone: "Asia/Taipei" }),
+            role: data.role === 'student' ? '學生' : '家長',
+            name: data.name || '',
+            grade: data.grade || '',
+            zone: data.zone || '',
+            email: data.email || '',
+            phone: data.phone || '',
+            chinese: (data.subjects.chinese && data.subjects.chinese.active) ? data.subjects.chinese.score : '無',
+            english: (data.subjects.english && data.subjects.english.active) ? data.subjects.english.score : '無',
+            math: (data.subjects.math && data.subjects.math.active) ? data.subjects.math.score : '無',
+            biology: (data.subjects.biology && data.subjects.biology.active) ? data.subjects.biology.score : '無',
+            physics: (data.subjects.physics && data.subjects.physics.active) ? data.subjects.physics.score : '無',
+            chemistry: (data.subjects.chemistry && data.subjects.chemistry.active) ? data.subjects.chemistry.score : '無',
+            earth_science: (data.subjects.earth_science && data.subjects.earth_science.active) ? data.subjects.earth_science.score : '無',
+            history: (data.subjects.history && data.subjects.history.active) ? data.subjects.history.score : '無',
+            geography: (data.subjects.geography && data.subjects.geography.active) ? data.subjects.geography.score : '無',
+            civics: (data.subjects.civics && data.subjects.civics.active) ? data.subjects.civics.score : '無'
+        };
+
+        fetch(GOOGLE_SCRIPT_URL, {
+            method: "POST",
+            mode: "no-cors",
+            headers: {
+                "Content-Type": "text/plain",
+            },
+            body: JSON.stringify(payload)
+        })
+        .then(() => {
+            console.log("資料已成功傳送至 Google Sheet！");
+        })
+        .catch((error) => {
+            console.error("傳送資料至 Google Sheet 時發生錯誤：", error);
+        });
+    }
+
+    function renderView() {
+        const container = document.getElementById('app-container');
+        container.innerHTML = ''; 
+
+        if (state.currentStep === 0) {
+            container.innerHTML = views[0];
+        } else if (state.currentStep === 1) {
+            // 第一步：學科成績填寫
+            container.innerHTML = views[1];
+            if (Object.keys(state.data.subjects).length === 0) {
+                Object.keys(subjectMap).forEach(key => {
+                    state.data.subjects[key] = { active: true, score: '' };
+                });
+            }
+            Object.keys(subjectMap).forEach(key => {
+                const subjState = state.data.subjects[key] || { active: true, score: '' };
+                const inputEl = document.getElementById(`subj-${key}-score`);
+                const naEl = document.getElementById(`subj-${key}-na`);
+                if (inputEl && naEl) {
+                    inputEl.value = subjState.score;
+                    naEl.checked = !subjState.active;
+                    if (!subjState.active) {
+                        inputEl.disabled = true;
+                        inputEl.classList.add('bg-gray-100');
+                    }
+                }
+            });
+        } else if (state.currentStep === 2) {
+            // 第二步：SNAP-IV 量表評估
+            container.innerHTML = views[2];
+            state.data.snap.forEach((val, idx) => {
+                if (val !== null) {
+                    const btn = document.querySelector(`.snap-btn[data-q="${idx}"][data-v="${val}"]`);
+                    if(btn) btn.classList.add('selected');
+                }
+            });
+        } else if (state.currentStep === 3) {
+            // 第三步：個人基本資料（必填解鎖關卡）
+            container.innerHTML = views[3];
+            if (state.data.role) document.getElementById('role').value = state.data.role;
+            if (state.data.name) document.getElementById('name').value = state.data.name;
+            if (state.data.grade) document.getElementById('grade').value = state.data.grade;
+            if (state.data.zone) document.getElementById('zone').value = state.data.zone;
+            if (state.data.email) document.getElementById('email').value = state.data.email;
+            if (state.data.phone) document.getElementById('phone').value = state.data.phone;
+        } else if (state.currentStep === 4) {
+            container.innerHTML = views[4];
+        } else if (state.currentStep === 5) {
+            container.innerHTML = views[5];
+            populateReport();
+        }
+    }
+
+    function nextStep() {
+        state.currentStep++;
+        renderView();
+        window.scrollTo(0, 0);
+    }
+
+    function toggleSubject(key) {
+        if (!state.data.subjects[key]) {
+             state.data.subjects[key] = { active: true, score: '' };
+        }
+        const isNA = document.getElementById(`subj-${key}-na`).checked;
+        const input = document.getElementById(`subj-${key}-score`);
+        
+        state.data.subjects[key].active = !isNA;
+        if (isNA) {
+            input.disabled = true;
+            input.value = '';
+            state.data.subjects[key].score = '';
+            input.classList.add('bg-gray-100');
+        } else {
+            input.disabled = false;
+            input.classList.remove('bg-gray-100');
+        }
+    }
+
+    function updateGrade(key, val) {
+        if (!state.data.subjects[key]) {
+             state.data.subjects[key] = { active: true, score: '' };
+        }
+        
+        if (val === '') {
+            state.data.subjects[key].score = '';
+            return;
+        }
+
+        let num = parseInt(val, 10);
+        if (isNaN(num)) {
+            state.data.subjects[key].score = '';
+            document.getElementById(`subj-${key}-score`).value = '';
+            return;
+        }
+
+        if (num > 100) num = 100;
+        if (num < 0) num = 0;
+
+        state.data.subjects[key].score = num;
+        document.getElementById(`subj-${key}-score`).value = num;
+    }
+
+    function selectSnap(qIndex, value, btnElement) {
+        state.data.snap[qIndex] = value;
+        const parent = btnElement.parentElement;
+        parent.querySelectorAll('.snap-btn').forEach(b => b.classList.remove('selected'));
+        btnElement.classList.add('selected');
+        const qContainer = document.getElementById(`q-container-${qIndex}`);
+        if(qContainer) {
+            qContainer.classList.remove('error-highlight');
+        }
+    }
+
+    function generateSnapSection(title, qs, startIndex) {
+        let html = `<div class="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 mb-8">
+            <h3 class="text-xl font-bold mb-4 text-blue-800 border-b pb-2">${title}</h3>
+            <div class="space-y-6">`;
+        
+        qs.forEach((q, idx) => {
+            const actualIndex = startIndex + idx;
+            html += `
+                <div id="q-container-${actualIndex}" class="flex flex-col md:flex-row md:items-center justify-between p-4 bg-gray-50 rounded-xl gap-4 transition-colors">
+                    <div class="md:w-3/5 text-gray-700 font-medium">${q}</div>
+                    <div class="md:w-2/5 flex justify-between gap-2">
+                        <button onclick="selectSnap(${actualIndex}, 0, this)" class="snap-btn w-1/4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-100 transition-colors" data-q="${actualIndex}" data-v="0">0<br><span class="text-xs">完全沒有</span></button>
+                        <button onclick="selectSnap(${actualIndex}, 1, this)" class="snap-btn w-1/4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-100 transition-colors" data-q="${actualIndex}" data-v="1">1<br><span class="text-xs">有一點點</span></button>
+                        <button onclick="selectSnap(${actualIndex}, 2, this)" class="snap-btn w-1/4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-100 transition-colors" data-q="${actualIndex}" data-v="2">2<br><span class="text-xs">還算不少</span></button>
+                        <button onclick="selectSnap(${actualIndex}, 3, this)" class="snap-btn w-1/4 py-2 border rounded-lg text-sm bg-white hover:bg-gray-100 transition-colors" data-q="${actualIndex}" data-v="3">3<br><span class="text-xs">非常的多</span></button>
+                    </div>
+                </div>
+            `;
+        });
+        html += `</div></div>`;
+        return html;
+    }
+
+    function submitSnap() {
+        let missingIndex = -1;
+        for(let i = 0; i < 26; i++) {
+            if(state.data.snap[i] === null) {
+                missingIndex = i;
+                break;
+            }
+        }
+        
+        if (missingIndex !== -1) {
+            showToast("您還有題目尚未作答，請完成所有評估題！");
+            const qContainer = document.getElementById(`q-container-${missingIndex}`);
+            if(qContainer) {
+                qContainer.classList.add('error-highlight');
+                qContainer.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+            return;
+        }
+
+        // SNAP 作答完畢，進入個人資料填寫關卡
+        nextStep();
+    }
+
+    function submitPersonalInfo() {
+        const roleEl = document.getElementById('role');
+        const nameEl = document.getElementById('name');
+        const gradeEl = document.getElementById('grade');
+        const zoneEl = document.getElementById('zone');
+
+        const role = roleEl.value;
+        const name = nameEl.value.trim();
+        const grade = gradeEl.value;
+        const zone = zoneEl.value;
+
+        let hasError = false;
+
+        // 清除舊有的錯誤高亮
+        [roleEl, nameEl, gradeEl, zoneEl].forEach(el => el.classList.remove('error-highlight'));
+
+        if (!role) { roleEl.classList.add('error-highlight'); hasError = true; }
+        if (!name) { nameEl.classList.add('error-highlight'); hasError = true; }
+        if (!grade) { gradeEl.classList.add('error-highlight'); hasError = true; }
+        if (!zone) { zoneEl.classList.add('error-highlight'); hasError = true; }
+
+        if (hasError) {
+            showToast("請完整填寫所有標示 * 的個人基本資料！");
+            return;
+        }
+
+        // 儲存基本資料
+        state.data.role = role;
+        state.data.name = name;
+        state.data.grade = grade;
+        state.data.zone = zone;
+        state.data.email = document.getElementById('email').value.trim();
+        state.data.phone = document.getElementById('phone').value.trim();
+
+        // 🌟 發送資料至 Google Sheet
+        sendToGoogleSheet(state.data);
+
+        // 進入 Loading 與報告頁面
+        generateReport();
+    }
+
+    function generateReport() {
+        state.currentStep = 4;
+        renderView();
+
+        setTimeout(() => {
+            state.currentStep = 5;
+            renderView();
+        }, 2500); 
+    }
+
+    function populateReport() {
+        const { role, name, grade, snap, subjects } = state.data;
+        
+        const roleText = role === 'student' ? '同學' : '家長';
+        let stageCode = 'e'; 
+        let levelText = '國小';
+        if (grade.startsWith('j')) { stageCode = 'j'; levelText = '國中'; }
+        else if (grade.startsWith('s')) { stageCode = 's'; levelText = '高中'; }
+
+        const kb = knowledgeBase[stageCode];
+        const displayName = name ? name : '您';
+        document.getElementById('report-subtitle').innerText = `為 ${displayName} ${roleText} 量身打造的 ${levelText} 階段自學力提升指南`;
+
+        // ==========================================
+        // 1. 學科表現分析
+        // ==========================================
+        const validGrades = [];
+        Object.keys(subjectMap).forEach(key => {
+            const s = subjects[key];
+            if (s && s.active && s.score !== '') {
+                validGrades.push({ key: key, subject: subjectMap[key], score: parseInt(s.score) });
+            }
+        });
+
+        let academicSummary = "";
+        let academicAdvices = [];
+        let worstSubjectKey = "";
+
+        if (validGrades.length > 0) {
+            validGrades.sort((a, b) => b.score - a.score);
+            const best = validGrades[0];
+            const worst = validGrades[validGrades.length - 1];
+            worstSubjectKey = worst.key;
+            const avg = Math.round(validGrades.reduce((acc, curr) => acc + curr.score, 0) / validGrades.length);
+
+            academicSummary = `Hi ${displayName}，我是星星老師！看過成績後，我發現你的平均表現落在 **${avg}** 分。非常棒的是，你在 **${best.subject}**（${best.score}分）展現了絕佳的理解力，請記住這份成就感，這是你未來的絕對優勢！至於 **${worst.subject}**（${worst.score}分）暫時卡關也沒關係，老師不會直接給你答案，但以下是我為你準備的專屬自學破關策略：`;
+
+            academicAdvices.push(`💡 ${kb.core[0]}`);
+            academicAdvices.push(`💡 ${kb.core[1]}`);
+            
+            const worstAdvice = kb.subjects[worstSubjectKey] || "**【學習劣勢突破】** 星星老師建議重新檢視基礎觀念，勇敢面對錯題，並試著自己訂定小範圍的學習計畫來突破。";
+            academicAdvices.push(`🎯 ${worstAdvice}`);
+            
+        } else {
+            academicSummary = `Hi ${displayName}，我是星星老師！雖然目前沒有具體的學科分數，但我為你準備了這個階段最重要的自學心法，幫助你先建立好學習的「底層作業系統」：`;
+            academicAdvices.push(`💡 ${kb.core[0]}`);
+            academicAdvices.push(`💡 ${kb.core[1]}`);
+            document.getElementById('academic-no-data').classList.remove('hidden');
+        }
+
+        if (stageCode === 'e') {
+            academicAdvices.push(`🎓 **【星星老師看升學】國小升國中學區與私校新政：**<br>若未來考慮公立熱門「額滿學校」，請家長務必留意嚴格的「共同設籍與居住事實」審查，公家或眷村宿舍無法作為優先分發依據。若有意就讀私立國中，112 學年起多數私中已廢除筆試，改採公開抽籤或評估「國小在學表現」。星星老師建議：在國小階段培養孩子主動閱讀與自學的習慣，遠比過度填鴨補習更能適應未來的多元選才。`);
+        } else if (stageCode === 'j') {
+            academicAdvices.push(`🎓 **【星星老師看升學】115 會考「積點制 2.0」與素養命題變革：**<br>為解決一題之差即大幅滑落的問題，115 年引進「積點制 2.0」，增加鑑別度。更重要的是，會考已全面轉向「素養導向」，特徵是文字量長、跨領域及圖表判讀多。星星老師提醒：讀書絕對不能死記硬背！務必在日常中強化「長篇資訊擷取」與「邏輯分析」的能力，學會自己找答案。`);
+        } else if (stageCode === 's') {
+            academicAdvices.push(`🎓 **【星星老師看升學】115 學年度大學考招重大新政：**<br>申請入學極度看重「學習歷程檔案」。星星老師強調：教授看重的是你探究歷程的**「真實反思」**，而不是獎狀堆疊，這正是我們平常練習自主規劃與回顧筆記的成果展現！此外，115 學年起**英文題型改為「5選4」**，加重邏輯推理；台大醫科也改採**社會科**。請盡早釐清自己的優劣勢，精準選擇適合自己的工具與方向。`);
+        }
+
+        document.getElementById('academic-summary-text').innerHTML = academicSummary.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold text-blue-800">$1</span>');
+        
+        const advList = document.getElementById('academic-advice-list');
+        advList.innerHTML = '';
+        academicAdvices.forEach(adv => {
+            const li = document.createElement('li');
+            li.innerHTML = adv.replace(/\*\*(.*?)\*\*/g, '<strong class="text-blue-900">$1</strong>');
+            advList.appendChild(li);
+        });
+
+        // ==========================================
+        // 2. 學習行為與專注力分析 (SNAP-IV)
+        // ==========================================
+        let inattCount = 0; 
+        let hyperCount = 0; 
+        let oppoCount = 0;  
+
+        for(let i=0; i<9; i++) { if(snap[i] >= 2) inattCount++; }
+        for(let i=9; i<18; i++) { if(snap[i] >= 2) hyperCount++; }
+        for(let i=18; i<26; i++) { if(snap[i] >= 2) oppoCount++; }
+
+        let behaviorSummary = `根據 SNAP-IV 評估，星星老師幫你統整了過去半年內的行為指標：**注意力與組織力** 警訊有 ${inattCount} 項、**活動量與衝動控制** 有 ${hyperCount} 項、**情緒控制與對立** 有 ${oppoCount} 項。這些數據能幫助我們釐清學習上的「外部干擾」與「潛在障礙」。`;
+        document.getElementById('behavior-summary-text').innerHTML = behaviorSummary.replace(/\*\*(.*?)\*\*/g, '<span class="font-bold text-orange-800">$1</span>');
+
+        // ADHD 專屬臨床評估與三維度應對指南
+        if (inattCount >= 6 || hyperCount >= 6 || oppoCount >= 4) {
+            document.getElementById('alert-container').classList.remove('hidden');
+            let reasons = [];
+            if (inattCount >= 6) reasons.push("「注意力不足」達 6 題以上（勾選『還算不少』以上）");
+            if (hyperCount >= 6) reasons.push("「過動/衝動」達 6 題以上（勾選『還算不少』以上）");
+            if (oppoCount >= 4) reasons.push("「反抗對立」達 4 題以上（勾選『還算不少』以上）");
+            
+            let alertMsg = `
+                <p class="font-bold text-lg text-red-800 mb-2">星星老師溫馨提醒：檢測顯示 ${displayName} 在 ${reasons.join("；")}，符合初步關注門檻！</p>
+                <p class="mb-4 text-red-950">排除潛在障礙是建立自學力的第一步。若這些情況已同時出現在學校和家中，並影響到課業與日常生活，<strong>強烈建議尋求大醫院的兒童心智科或兒童精神科進行正式評估與診斷</strong>。</p>
+                
+                <div class="mt-4 pt-4 border-t border-red-200 text-gray-800 space-y-4">
+                    <div>
+                        <h4 class="font-bold text-red-900 text-md flex items-center gap-1 mb-1">🩺 一、 專業醫療介入與治療</h4>
+                        <ul class="list-disc pl-5 text-sm space-y-1 text-gray-700">
+                            <li><strong>藥物治療與心理治療結合：</strong>科學證實最有效的綜合介入方式。藥物主要改善不專心與衝動控制；心理治療（含行為改變技術、親職諮商）則幫助學習人際與解決問題技巧。</li>
+                            <li><strong>多樣化復健訓練：</strong>可包含職能治療（感統與精細動作）、物理治療、語言治療、認知訓練與社會互動訓練。</li>
+                            <li><strong>環境與教育調整：</strong>配合專業評估對家庭與學校之建議，如教室座位管理策略或考試調適措施。</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-red-900 text-md flex items-center gap-1 mb-1">💖 二、 家長的心態調整與應對策略</h4>
+                        <ul class="list-disc pl-5 text-sm space-y-1 text-gray-700">
+                            <li><strong>調整心態與接納：</strong>理解 ADHD 屬於天生大腦行為抑制困難，避免過度自我責備。練習以「正念」應對，接納孩子當下的身心與挫敗感。</li>
+                            <li><strong>充實專業知識：</strong>推薦閱讀《過動兒父母完全指導手冊》、《兒童注意力訓練手冊》等專業書籍，深瞭病理機制能更有助於接納孩子。</li>
+                            <li><strong>發掘生命亮點：</strong>診斷是為了理解而非標籤限制，應在此基礎上發掘孩子優勢，創造適合的互動模式。</li>
+                        </ul>
+                    </div>
+
+                    <div>
+                        <h4 class="font-bold text-red-900 text-md flex items-center gap-1 mb-1">🔍 三、 專業評估的重要性</h4>
+                        <ul class="list-disc pl-5 text-sm space-y-1 text-gray-700">
+                            <li><strong>心理衡鑑：</strong>由醫師與臨床心理師透過標準化工具（如魏氏智力測驗、電腦持續注意力測驗 CPT）客觀測量工作記憶與執行功能。</li>
+                            <li><strong>跨情境觀察：</strong>確認症狀是否同時出現於兩種以上環境（家庭與學校），收集教師回饋是診斷關鍵。</li>
+                            <li><strong>鑑別診斷：</strong>精準排除誦讀困難、焦慮或工作記憶困難等其他可能因素，確保治療方向正確。</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            document.getElementById('snap-alert-text').innerHTML = alertMsg;
+        } else {
+            document.getElementById('alert-container').classList.add('hidden');
+        }
+
+        let behaviorAdvices = [];
+        if (inattCount >= 4) {
+            behaviorAdvices.push(`⏱️ ${kb.behavior.inattention}`);
+        } else {
+            behaviorAdvices.push(`🎯 **【星星老師肯定】專注力與組織力維持良好**：你目前在課業或活動上，展現了不錯的專注力與自主規劃能力。請繼續保持，並試著挑戰自己訂定更長期的學習計畫！`);
+        }
+
+        if (hyperCount >= 4 || oppoCount >= 3) {
+            behaviorAdvices.push(`🤝 ${kb.behavior.hyper_oppo}`);
+        }
+        
+        behaviorAdvices.push(`💖 ${kb.parent_mindset}`);
+        behaviorAdvices.push(`🌟 **【星星老師看資源】弱勢與特殊身份保障**：若符合法定特種身分，請務必善用資源。例如：取得原住民語認證在分發入學可加分 35%；身心障礙學生有專屬甄試且總分加 25%；經濟弱勢生在大學申請有「願景計畫」的二次比序機會。`);
+
+        const behList = document.getElementById('behavior-advice-list');
+        behList.innerHTML = '';
+        behaviorAdvices.forEach(adv => {
+            const li = document.createElement('li');
+            li.innerHTML = adv.replace(/\*\*(.*?)\*\*/g, '<strong class="text-orange-900">$1</strong>');
+            behList.appendChild(li);
+        });
+
+        renderCharts(validGrades, inattCount, hyperCount, oppoCount);
+    }
+
+    function renderCharts(grades, inatt, hyper, oppo) {
+        const ctx1 = document.getElementById('academicChart').getContext('2d');
+        const academicLabels = grades.map(g => g.subject);
+        const academicData = grades.map(g => g.score);
+
+        new Chart(ctx1, {
+            type: 'radar',
+            data: {
+                labels: academicLabels.length > 0 ? academicLabels : ['無資料'],
+                datasets: [{
+                    label: '學科分數',
+                    data: academicData.length > 0 ? academicData : [0],
+                    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                    borderColor: 'rgba(59, 130, 246, 1)',
+                    pointBackgroundColor: 'rgba(59, 130, 246, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                scales: { r: { min: 0, max: 100, ticks: { stepSize: 20 } } },
+                plugins: { legend: { display: false } }
+            }
+        });
+
+        const ctx2 = document.getElementById('behaviorChart').getContext('2d');
+        const inattPct = Math.round((inatt / 9) * 100);
+        const hyperPct = Math.round((hyper / 9) * 100);
+        const oppoPct = Math.round((oppo / 8) * 100);
+
+        new Chart(ctx2, {
+            type: 'radar',
+            data: {
+                labels: ['注意力不足', '過動/衝動', '對立反抗'],
+                datasets: [{
+                    label: '風險指數(%)',
+                    data: [inattPct, hyperPct, oppoPct],
+                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
+                    borderColor: 'rgba(239, 68, 68, 1)',
+                    pointBackgroundColor: 'rgba(239, 68, 68, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                scales: { 
+                    r: { 
+                        min: 0, max: 100, 
+                        ticks: { stepSize: 25 },
+                        pointLabels: { font: { size: 14 } }
+                    } 
+                },
+                plugins: { legend: { display: false } }
+            }
+        });
+    }
+
+    const views = [
+        // Step 0: Welcome
+        `
+        <div class="text-center fade-in pt-8 pb-12">
+            <div class="inline-block bg-yellow-100 p-4 rounded-full mb-6">
+                <span class="text-6xl">⭐️</span>
+            </div>
+            <h2 class="text-3xl sm:text-4xl font-bold mb-4 text-blue-900">Hi，我是星星老師！</h2>
+            <p class="text-xl text-gray-700 mb-8 font-medium">學習不該只是聽老師講課，真正的學習是自己能夠學會。</p>
+            <p class="text-gray-600 mb-10 max-w-lg mx-auto leading-relaxed">
+                我相信每個孩子都能夠成為自己的學習主導者。<br>我們將透過幾個簡單的步驟，帶你釐清學習現況，找出專屬你的<strong class="text-blue-600">自學方程式</strong>。只需約 3 分鐘即可完成！
+            </p>
+            <button onclick="nextStep()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-full shadow-lg transition-transform transform hover:scale-105 text-lg flex items-center gap-3 mx-auto">
+                開始探索我的學習力 <span>🚀</span>
+            </button>
+        </div>
+        `,
+        
+        // Step 1: Grades
+        `
+        <div class="fade-in max-w-4xl mx-auto pb-4">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold mb-3 text-blue-900">⭐️ 第一步：學習現況盤點</h2>
+                <p class="text-gray-600">請填寫前次段考分數。分數只是參考，<strong class="text-blue-600">重點是星星老師要幫你找出進步的方向！</strong><br><span class="text-sm text-gray-400">（若無該科成績，請勾選「無成績」）</span></p>
+            </div>
+            
+            <div class="space-y-6 mb-8">
+                <!-- 📚 基礎科目 -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-blue-400">
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700"><span class="text-2xl">📚</span> 基礎科目</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        ${['chinese', 'english', 'math'].map(key => `
+                            <div class="border rounded-xl p-4 bg-gray-50 flex flex-col justify-between">
+                                <div class="flex justify-between items-center mb-3">
+                                    <label class="font-bold text-lg text-gray-800">${subjectMap[key]}</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="checkbox" id="subj-${key}-na" onchange="toggleSubject('${key}')" class="w-4 h-4 text-blue-600 rounded">
+                                        <label for="subj-${key}-na" class="text-xs text-gray-500 cursor-pointer">無成績</label>
+                                    </div>
+                                </div>
+                                <input type="number" id="subj-${key}-score" min="0" max="100" placeholder="分數 (0-100)" onwheel="this.blur()" onchange="updateGrade('${key}', this.value)" class="w-full border-gray-300 rounded-lg p-2 text-center text-xl focus:ring-blue-500 focus:border-blue-500">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- 🔬 自然科學 -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-green-400">
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700"><span class="text-2xl">🔬</span> 自然科學</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+                        ${['biology', 'physics', 'chemistry', 'earth_science'].map(key => `
+                            <div class="border rounded-xl p-4 bg-gray-50 flex flex-col justify-between">
+                                <div class="flex justify-between items-center mb-3">
+                                    <label class="font-bold text-lg text-gray-800">${subjectMap[key]}</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="checkbox" id="subj-${key}-na" onchange="toggleSubject('${key}')" class="w-4 h-4 text-blue-600 rounded">
+                                        <label for="subj-${key}-na" class="text-xs text-gray-500 cursor-pointer">無成績</label>
+                                    </div>
+                                </div>
+                                <input type="number" id="subj-${key}-score" min="0" max="100" placeholder="分數 (0-100)" onwheel="this.blur()" onchange="updateGrade('${key}', this.value)" class="w-full border-gray-300 rounded-lg p-2 text-center text-xl focus:ring-green-500 focus:border-green-500">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+
+                <!-- 🌍 社會科學 -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border-t-4 border-yellow-400">
+                    <h3 class="text-xl font-bold mb-4 flex items-center gap-2 text-gray-700"><span class="text-2xl">🌍</span> 社會科學</h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                         ${['history', 'geography', 'civics'].map(key => `
+                            <div class="border rounded-xl p-4 bg-gray-50 flex flex-col justify-between">
+                                <div class="flex justify-between items-center mb-3">
+                                    <label class="font-bold text-lg text-gray-800">${subjectMap[key]}</label>
+                                    <div class="flex items-center gap-1">
+                                        <input type="checkbox" id="subj-${key}-na" onchange="toggleSubject('${key}')" class="w-4 h-4 text-blue-600 rounded">
+                                        <label for="subj-${key}-na" class="text-xs text-gray-500 cursor-pointer">無成績</label>
+                                    </div>
+                                </div>
+                                <input type="number" id="subj-${key}-score" min="0" max="100" placeholder="分數 (0-100)" onwheel="this.blur()" onchange="updateGrade('${key}', this.value)" class="w-full border-gray-300 rounded-lg p-2 text-center text-xl focus:ring-yellow-500 focus:border-yellow-500">
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            </div>
+
+            <div class="text-center">
+                <button onclick="nextStep()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-8 rounded-full shadow-md transition-colors text-lg">
+                    下一步：學習行為評估
+                </button>
+            </div>
+        </div>
+        `,
+
+        // Step 2: Self Assessment (SNAP-IV)
+        `
+        <div class="fade-in max-w-4xl mx-auto pb-8">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold mb-3 text-blue-900">⭐️ 第二步：學習行為評估 (SNAP-IV)</h2>
+                <p class="text-gray-600 bg-blue-50 inline-block px-5 py-3 rounded-xl border border-blue-100">
+                    請回想 <strong class="text-blue-700">過去 6 個月內</strong> 的日常表現。<br>誠實面對自己的狀態，是培養自學力的第一步！
+                </p>
+            </div>
+            
+            ${generateSnapSection('一、 注意力不足（Inattention）指標', inattentionQs, 0)}
+            ${generateSnapSection('二、 過動／衝動（Hyperactivity/Impulsivity）指標', hyperQs, 9)}
+            ${generateSnapSection('三、 對立反抗（Oppositional Defiant）指標', oppoQs, 18)}
+
+            <div class="text-center mt-10">
+                <button onclick="submitSnap()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-full shadow-xl transition-transform transform hover:scale-105 text-xl flex items-center gap-3 mx-auto">
+                    下一步：填寫個人資料解鎖報告 <span>🔒</span>
+                </button>
+            </div>
+        </div>
+        `,
+        
+        // Step 3: Basic Info (Unlock Gate)
+        `
+        <div class="fade-in max-w-3xl mx-auto pb-4">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-bold mb-3 text-blue-900">⭐️ 第三步：最後一步，填寫個人資料解鎖報告</h2>
+                <p class="text-gray-600 bg-yellow-50 inline-block px-5 py-3 rounded-xl border border-yellow-200">
+                    請填寫以下資訊，星星老師將為您產生專屬的分析報告並可同步備份給您！
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8 text-left bg-white p-8 rounded-2xl border border-gray-200 shadow-md">
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">我是... <span class="text-red-500">*</span></label>
+                    <select id="role" class="w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">請選擇</option>
+                        <option value="student">學生本人</option>
+                        <option value="parent">家長</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">姓名或暱稱 <span class="text-red-500">*</span></label>
+                    <input type="text" id="name" placeholder="例：王小明" class="w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">目前就讀年級 <span class="text-red-500">*</span></label>
+                    <select id="grade" class="w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">請選擇</option>
+                        <optgroup label="國小">
+                            <option value="e1">國小一年級</option><option value="e2">國小二年級</option>
+                            <option value="e3">國小三年級</option><option value="e4">國小四年級</option>
+                            <option value="e5">國小五年級</option><option value="e6">國小六年級</option>
+                        </optgroup>
+                        <optgroup label="國中">
+                            <option value="j1">國中一年級</option><option value="j2">國中二年級</option><option value="j3">國中三年級</option>
+                        </optgroup>
+                        <optgroup label="高中">
+                            <option value="s1">高中一年級</option><option value="s2">高中二年級</option><option value="s3">高中三年級</option>
+                        </optgroup>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">所在學區 <span class="text-red-500">*</span></label>
+                    <select id="zone" class="w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                        <option value="">請選擇</option>
+                        <option value="n">北區 (基北、桃連、竹苗)</option>
+                        <option value="c">中區 (中投、彰化、雲林)</option>
+                        <option value="s">南區 (嘉義、台南、高雄、屏東)</option>
+                        <option value="e">東部及離島</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">電子信箱 (選填以接收報告)</label>
+                    <input type="email" id="email" placeholder="example@email.com" class="w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">手機號碼 (選填)</label>
+                    <input type="tel" id="phone" placeholder="09XX-XXX-XXX" class="w-full border-gray-300 rounded-lg shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500">
+                </div>
+            </div>
+            
+            <div class="text-center">
+                <button onclick="submitPersonalInfo()" class="bg-green-600 hover:bg-green-700 text-white font-bold py-4 px-10 rounded-full shadow-xl transition-transform transform hover:scale-105 text-xl flex items-center gap-3 mx-auto">
+                    產生星星老師分析報告 <span>✨</span>
+                </button>
+            </div>
+        </div>
+        `,
+
+        // Step 4: Loading
+        `
+        <div class="text-center py-16 fade-in">
+            <div class="inline-block relative w-20 h-20 mb-6">
+                <div class="absolute inset-0 border-4 border-yellow-200 rounded-full"></div>
+                <div class="absolute inset-0 border-4 border-yellow-500 rounded-full border-t-transparent animate-spin"></div>
+                <span class="absolute inset-0 flex items-center justify-center text-3xl">⭐️</span>
+            </div>
+            <h2 class="text-2xl font-bold text-blue-900 mb-2">星星老師正在為您分析數據...</h2>
+            <p class="text-gray-500">正在萃取專屬的自學力提升方案並傳送記錄</p>
+        </div>
+        `,
+
+        // Step 5: Result Report
+        `
+        <div class="fade-in max-w-6xl mx-auto pb-10">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl sm:text-4xl font-bold mb-4 text-blue-900 flex justify-center items-center gap-3">
+                    <span class="text-yellow-400">✨</span> 星星老師陪你讀：專屬學習導航報告 <span class="text-yellow-400">✨</span>
+                </h2>
+                <p id="report-subtitle" class="text-lg text-gray-600 font-medium bg-white inline-block px-6 py-2 rounded-full shadow-sm border border-gray-100"></p>
+            </div>
+
+            <!-- ⚠️ Clinical Alert Section -->
+            <div id="alert-container" class="hidden mb-8 bg-red-50 border-l-8 border-red-500 p-6 rounded-r-2xl shadow-sm">
+                <div class="flex items-start gap-4">
+                    <span class="text-3xl">⚠️</span>
+                    <div class="w-full">
+                        <h3 class="text-xl font-bold text-red-700 mb-2">專業醫療介入與評估建議</h3>
+                        <div id="snap-alert-text" class="text-red-900 leading-relaxed space-y-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                <!-- 📚 學科表現分析卡片 -->
+                <div class="bg-white rounded-3xl shadow-lg border border-blue-100 overflow-hidden flex flex-col">
+                    <div class="bg-blue-600 text-white p-4 text-center">
+                        <h3 class="text-xl font-bold flex justify-center items-center gap-2">
+                            <span>📚</span> 學科表現分析與建議
+                        </h3>
+                    </div>
+                    <div class="p-6 flex-grow flex flex-col">
+                        <div class="w-full h-64 mb-6 relative">
+                            <canvas id="academicChart"></canvas>
+                        </div>
+                        
+                        <div id="academic-no-data" class="hidden text-center text-gray-500 mb-4 bg-gray-50 p-4 rounded-xl">
+                            無學科成績資料，將提供一般性建議。
+                        </div>
+                        
+                        <div class="bg-blue-50 rounded-2xl p-5 mb-6 text-gray-800 leading-relaxed shadow-inner">
+                            <p id="academic-summary-text"></p>
+                        </div>
+                        
+                        <div class="mt-auto">
+                            <h4 class="font-bold text-blue-800 mb-4 border-b-2 border-blue-100 pb-2 flex items-center gap-2">
+                                <span>🎯</span> 具體破關行動指南
+                            </h4>
+                            <ul id="academic-advice-list" class="space-y-4 text-gray-700 list-disc pl-5 marker:text-blue-500">
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 🧠 學習行為與專注力分析卡片 -->
+                <div class="bg-white rounded-3xl shadow-lg border border-orange-100 overflow-hidden flex flex-col">
+                    <div class="bg-orange-500 text-white p-4 text-center">
+                        <h3 class="text-xl font-bold flex justify-center items-center gap-2">
+                            <span>🧠</span> 學習行為與專注力分析
+                        </h3>
+                    </div>
+                    <div class="p-6 flex-grow flex flex-col">
+                        <div class="w-full h-64 mb-6 relative flex justify-center items-center">
+                            <canvas id="behaviorChart"></canvas>
+                        </div>
+                        
+                        <div class="bg-orange-50 rounded-2xl p-5 mb-6 text-gray-800 leading-relaxed shadow-inner">
+                            <p id="behavior-summary-text"></p>
+                        </div>
+                        
+                        <div class="mt-auto">
+                            <h4 class="font-bold text-orange-800 mb-4 border-b-2 border-orange-100 pb-2 flex items-center gap-2">
+                                <span>🛠️</span> 星星老師行為策略
+                            </h4>
+                            <ul id="behavior-advice-list" class="space-y-4 text-gray-700 list-disc pl-5 marker:text-orange-500">
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Call to Action -->
+            <div class="text-center bg-gradient-to-r from-blue-600 to-indigo-600 rounded-3xl p-8 text-white shadow-xl">
+                <h3 class="text-2xl font-bold mb-4">改變，從今天的一個小行動開始！</h3>
+                <p class="mb-6 text-blue-100">星星老師建議您先挑選上述的「一個」策略，在未來的一週內實踐看看。</p>
+                <div class="flex justify-center gap-4">
+                    <button onclick="window.print()" class="bg-white text-blue-700 hover:bg-gray-100 font-bold py-3 px-6 rounded-xl shadow-md transition-colors flex items-center gap-2">
+                        <span>🖨️</span> 列印專屬報告
+                    </button>
+                    <button onclick="location.reload()" class="bg-blue-800 hover:bg-blue-900 border border-blue-400 text-white font-bold py-3 px-6 rounded-xl shadow-md transition-colors flex items-center gap-2">
+                        <span>🔄</span> 重新測驗
+                    </button>
+                </div>
+            </div>
+        </div>
+        `
+    ];
+
+    // Initialize
+    window.onload = () => {
+        renderView();
+    };
+</script>
+
+</body>
+</html>

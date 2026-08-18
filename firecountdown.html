@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游老大的計時器</title>
+    <!-- 引入 Tailwind CSS (版面與排版) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 引入 Tone.js (合成篝火白噪音與低頻音) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- 引入 Canvas Confetti (時間到時的慶祝紙片動畫) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- 引入 Google Fonts (提供像素風格字體) -->
+    <link href="https://gs.jurieo.com/gemini/fonts-googleapis/css2?family=DotGothic16&family=Press+Start+2P&family=VT323&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --theme-casual: #4ade80; /* 休閒綠 */
+            --theme-fashion: #f472b6; /* 時尚粉 */
+            --theme-classic: #fbbf24; /* 古典琥珀(篝火色) */
+            --accent-color: var(--theme-classic); 
+            --font-family: 'DotGothic16', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: var(--font-family);
+            background-color: #000;
+            color: #fff;
+        }
+
+        /* 背景與遮罩設計 */
+        #bg-slider {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            z-index: 0;
+            background-color: #050505; /* 圖片載入前的底色 */
+        }
+        
+        .bg-slide {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-size: cover;
+            background-position: center;
+            opacity: 0;
+            transition: opacity 2s ease-in-out;
+        }
+        
+        .bg-slide.active { opacity: 1; }
+        
+        .overlay {
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 100%;
+            /* 保持微透光的暗色遮罩，讓背景圖可見又不會干擾文字 */
+            background: rgba(15, 15, 20, 0.45);
+            z-index: 1;
+            pointer-events: none; 
+        }
+
+        main {
+            position: relative;
+            z-index: 10;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start; /* 【修改】：從置中改為靠左對齊 */
+            justify-content: center;
+            text-align: center;
+            padding-left: 6%; /* 【修改】：與畫面左側保持適當距離 */
+        }
+
+        /* 毛玻璃面板效果 */
+        .glass-panel {
+            background: rgba(25, 25, 30, 0.6);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 1.5rem; /* 【修改】：縮小面板內距 */
+            width: 90%; 
+            max-width: 350px; /* 【修改】：限制最大寬度，讓它在桌機上大約佔 25% 比例 */
+        }
+
+        /* 圓形進度條與時間數字 */
+        .timer-container {
+            position: relative;
+            width: 220px; /* 【修改】：縮小計時器整體寬度 */
+            height: 220px; /* 【修改】：縮小計時器整體高度 */
+            margin: 1.5rem auto;
+            max-width: 100%;
+        }
+        
+        svg.progress-ring {
+            width: 100%;
+            height: 100%;
+            transform: rotate(-90deg);
+            filter: drop-shadow(0 0 8px var(--accent-color));
+        }
+        
+        .progress-ring__circle {
+            fill: transparent;
+            stroke: rgba(255, 255, 255, 0.08);
+            stroke-width: 10; /* 【修改】：線條調細 */
+        }
+        
+        .progress-ring__path {
+            fill: transparent;
+            stroke: var(--accent-color);
+            stroke-width: 10; /* 【修改】：線條調細 */
+            stroke-linecap: round;
+            transition: stroke-dashoffset 1s linear, stroke 0.3s;
+        }
+        
+        .time-display {
+            position: absolute;
+            top: 50%; left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 3rem; /* 【修改】：縮小時間數字字體 */
+            font-weight: bold;
+            text-shadow: 3px 3px 0 #000, -1px -1px 0 #000;
+            letter-spacing: 2px;
+        }
+
+        /* 動畫：呼吸光暈與警告紅光 */
+        @keyframes breath {
+            0% { filter: drop-shadow(0 0 5px var(--accent-color)); }
+            50% { filter: drop-shadow(0 0 25px var(--accent-color)); }
+            100% { filter: drop-shadow(0 0 5px var(--accent-color)); }
+        }
+        .breathing { animation: breath 3s infinite ease-in-out; }
+
+        @keyframes flash-red {
+            0% { color: #fff; text-shadow: 3px 3px 0 #000; }
+            50% { color: #ef4444; text-shadow: 0 0 20px #ef4444, 3px 3px 0 #000; }
+            100% { color: #fff; text-shadow: 3px 3px 0 #000; }
+        }
+        .warning { animation: flash-red 1s infinite; }
+        .warning-stroke { stroke: #ef4444 !important; filter: drop-shadow(0 0 15px #ef4444); }
+
+        /* 右側設定抽屜 */
+        #settings-drawer {
+            position: fixed;
+            top: 0; right: -400px; /* 預設隱藏在畫面外 */
+            width: 350px; max-width: 90vw; height: 100vh;
+            background: rgba(15, 15, 18, 0.95);
+            backdrop-filter: blur(12px);
+            border-left: 2px solid rgba(255, 255, 255, 0.1);
+            transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            z-index: 50;
+            overflow-y: auto;
+            padding: 2rem 1.5rem;
+        }
+        #settings-drawer.open { right: 0; }
+
+        /* 齒輪按鈕 */
+        #gear-btn {
+            position: fixed;
+            top: 1.5rem; right: 1.5rem;
+            z-index: 60;
+            background: rgba(30, 30, 40, 0.8);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 50%;
+            width: 50px; height: 50px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        #gear-btn:hover { transform: rotate(90deg) scale(1.1); background: #333; }
+
+        .pixel-input {
+            background: rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: #fff;
+            padding: 0.6rem;
+            width: 100%;
+            font-family: inherit;
+            margin-bottom: 1rem;
+            border-radius: 8px;
+            transition: border-color 0.2s;
+        }
+        .pixel-input:focus { outline: none; border-color: var(--accent-color); }
+        
+        .btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            padding: 0.6rem 1.2rem;
+            border-radius: 12px;
+            cursor: pointer;
+            font-family: inherit;
+            color: #fff;
+            transition: all 0.2s;
+            text-transform: uppercase;
+            margin: 0.25rem;
+            text-shadow: 1px 1px 0 #000;
+        }
+        .btn:hover {
+            background: var(--accent-color);
+            color: #000;
+            border-color: var(--accent-color);
+            transform: translateY(-2px);
+            text-shadow: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.5);
+        }
+        .btn:active { transform: translateY(0); }
+        
+        #quote-display {
+            font-size: 1.2rem;
+            margin-bottom: 0.5rem;
+            min-height: 2.5rem;
+            text-shadow: 2px 2px 4px #000;
+            transition: opacity 0.6s ease-in-out;
+            color: #e5e7eb;
+        }
+    </style>
+</head>
+<body>
+    <!-- 背景與遮罩 -->
+    <div id="bg-slider"></div>
+    <div class="overlay"></div>
+
+    <!-- 齒輪按鈕 -->
+    <button id="gear-btn" onclick="toggleSettings()">⚙️</button>
+
+    <!-- 主畫面內容 -->
+    <main>
+        <!-- 移除 Tailwind 原本的寬度設定，交給上面的 CSS 接管 -->
+        <div class="glass-panel">
+            <!-- 標題 -->
+            <h1 id="main-title" class="text-2xl sm:text-3xl font-bold mb-2 tracking-widest text-shadow-lg text-white">游老大的計時器</h1>
+            
+            <!-- 正能量輪播文字 -->
+            <div id="quote-display" class="px-2 text-sm sm:text-base">載入中...</div>
+
+            <!-- 計時器視覺主體 -->
+            <div class="timer-container breathing" id="timer-wrapper">
+                <svg class="progress-ring">
+                    <!-- 底圈與進度圈 (配合縮小後的尺寸，中心點改為 110，半徑改為 100) -->
+                    <circle class="progress-ring__circle" cx="110" cy="110" r="100"></circle>
+                    <circle class="progress-ring__path" id="progress-path" cx="110" cy="110" r="100"></circle>
+                </svg>
+                <div id="time-display" class="time-display">00:00</div>
+            </div>
+
+            <!-- 控制按鈕 -->
+            <div class="flex justify-center gap-2 sm:gap-4 mb-4">
+                <button class="btn font-bold text-sm sm:text-base px-3 py-2" onclick="startTimer()">Start</button>
+                <button class="btn font-bold text-sm sm:text-base px-3 py-2" onclick="pauseTimer()">Pause</button>
+                <button class="btn font-bold text-sm sm:text-base px-3 py-2" onclick="resetTimer()">Reset</button>
+            </div>
+
+            <!-- 預設時間按鈕區域 -->
+            <div id="preset-times" class="flex flex-wrap justify-center gap-2 mt-2 border-t border-gray-600/50 pt-4 text-sm">
+                <!-- 由 JS 動態注入 -->
+            </div>
+        </div>
+    </main>
+
+    <!-- 設定抽屜 -->
+    <aside id="settings-drawer" class="shadow-2xl">
+        <h2 class="text-2xl font-bold mb-6 border-b border-gray-600 pb-3">⚙️ 設定面板</h2>
+        
+        <label class="block text-sm mb-1 text-gray-400">大標題</label>
+        <input type="text" id="set-title" class="pixel-input" onchange="updateSettings()">
+
+        <label class="block text-sm mb-1 text-gray-400">完成提示語</label>
+        <input type="text" id="set-finish-msg" class="pixel-input" onchange="updateSettings()">
+
+        <label class="block text-sm mb-1 text-gray-400">正能量文字 (每行一句)</label>
+        <textarea id="set-quotes" class="pixel-input" rows="4" onchange="updateSettings()"></textarea>
+
+        <div class="flex gap-3 mb-4">
+            <div class="flex-1">
+                <label class="block text-sm mb-1 text-gray-400">主題顏色</label>
+                <select id="set-theme" class="pixel-input" onchange="updateSettings()">
+                    <option value="classic">古典 (琥珀)</option>
+                    <option value="casual">休閒 (翠綠)</option>
+                    <option value="fashion">時尚 (粉紅)</option>
+                </select>
+            </div>
+            <div class="flex-1">
+                <label class="block text-sm mb-1 text-gray-400">顯示字型</label>
+                <select id="set-font" class="pixel-input" onchange="updateSettings()">
+                    <option value="'DotGothic16', sans-serif">DotGothic</option>
+                    <option value="'VT323', monospace">VT323</option>
+                    <option value="'Press Start 2P', cursive">Press Start</option>
+                    <option value="Arial, sans-serif">Arial</option>
+                </select>
+            </div>
+        </div>
+
+        <label class="block text-sm mb-1 text-gray-400 mt-2 border-t border-gray-600 pt-4">時間按鈕 (分鐘，用逗號分隔)</label>
+        <input type="text" id="set-presets" class="pixel-input" onchange="updateSettings()">
+
+        <!-- 背景圖片管理 -->
+        <div class="mt-2 border-t border-gray-600 pt-4">
+            <div class="flex justify-between items-center mb-3">
+                <label class="block text-sm text-gray-300 font-bold">圖片管理</label>
+                <label class="flex items-center text-sm cursor-pointer hover:text-white text-gray-300">
+                    <input type="checkbox" id="set-rotate-bg" class="mr-2 w-4 h-4" onchange="updateSettings()"> 啟用輪播
+                </label>
+            </div>
+            <div id="bg-list" class="flex flex-col gap-2 mb-4 max-h-40 overflow-y-auto pr-1">
+                <!-- JS 動態注入背景清單 -->
+            </div>
+            <div class="flex gap-2">
+                <input type="text" id="new-bg-url" class="pixel-input mb-0 flex-1 text-sm" placeholder="輸入圖片網址 (URL)">
+                <button class="btn m-0 px-4 py-1" onclick="addBackground()">新增</button>
+            </div>
+            <p id="bg-msg" class="text-xs text-gray-500 mt-2 transition-colors duration-300">打勾代表加入輪播，最多自訂 10 張。</p>
+        </div>
+        
+        <button class="btn w-full mt-8 bg-red-900/40 hover:bg-red-700 border-red-500/50" onclick="resetToDefaults()">還原預設值</button>
+    </aside>
+
+    <script>
+        /* 確保程式碼純淨無誤，移除所有可能引發解析錯誤的字元 */
+
+        const defaultState = {
+            title: "游老大的計時器",
+            finishMsg: "時間到！好好休息一下吧！",
+            quotes: [
+                "休息是為了走更長遠的路...",
+                "補充能量，準備迎接下一個挑戰！",
+                "深呼吸，感受篝火的溫暖。",
+                "暫時放下武器，坐下來歇息一會。"
+            ],
+            theme: "classic",
+            font: "'DotGothic16', sans-serif",
+            presetTimes: [5, 10, 15, 25],
+            rotateBg: true,
+            bgs: [] // 初始為空，將自動透過 CSV 動態載入您提供的圖片
+        };
+
+        const STORAGE_KEY = "bonfireTimerState_v4"; // 變更 key 為 v4，強迫重新載入
+        let state = null;
+        try {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            if (saved) {
+                state = JSON.parse(saved);
+            }
+        } catch (e) {
+            console.warn("Storage error", e);
+        }
+        
+        if (!state) {
+            state = JSON.parse(JSON.stringify(defaultState));
+        }
+        
+        let timerInterval = null;
+        let timeLeft = 0;
+        let totalTime = 0;
+        let isRunning = false;
+        
+        let currentBgIndex = 0;
+        let bgInterval = null;
+        let quoteInterval = null;
+        let currentQuoteIndex = 0;
+
+        let fireOsc = null;
+        let fireLfo = null;
+        let fireVol = null;
+        let crackleNoise = null;
+        let crackleFilter = null;
+        let crackleVolume = null;
+        let isAudioInit = false;
+
+        async function initAudio() {
+            if (isAudioInit) return;
+            try {
+                await Tone.start();
+                isAudioInit = true;
+            } catch (error) {
+                console.error("Audio init error:", error);
+            }
+        }
+
+        function playBonfireSound() {
+            if (!isAudioInit) return;
+            if (crackleNoise) return; 
+
+            try {
+                fireOsc = new Tone.Oscillator(60, "triangle").start();
+                fireLfo = new Tone.LFO(4, 50, 70).start();
+                fireLfo.connect(fireOsc.frequency);
+                fireVol = new Tone.Volume(-20).toDestination();
+                fireOsc.connect(fireVol);
+
+                crackleNoise = new Tone.Noise("brown").start();
+                crackleFilter = new Tone.Filter(1000, "highpass");
+                crackleVolume = new Tone.Volume(-15).toDestination();
+                crackleNoise.connect(crackleFilter);
+                crackleFilter.connect(crackleVolume);
+
+                window.crackleInterval = setInterval(function() {
+                    if (crackleVolume && crackleVolume.volume) {
+                        if (Math.random() > 0.8) {
+                            crackleVolume.volume.rampTo((Math.random() * 5) - 5, 0.05);
+                            setTimeout(function() { 
+                                if(crackleVolume && crackleVolume.volume) crackleVolume.volume.rampTo(-15, 0.2); 
+                            }, 100);
+                        } else if (Math.random() > 0.5) {
+                            crackleVolume.volume.rampTo(-10, 0.1);
+                            setTimeout(function() { 
+                                if(crackleVolume && crackleVolume.volume) crackleVolume.volume.rampTo(-15, 0.2); 
+                            }, 200);
+                        }
+                    }
+                }, 400);
+            } catch (err) {
+                console.error("Sound play error:", err);
+            }
+        }
+
+        function stopBonfireSound() {
+            if (window.crackleInterval) clearInterval(window.crackleInterval);
+            
+            try {
+                if (crackleNoise) { crackleNoise.stop(); crackleNoise.dispose(); crackleNoise = null; }
+                if (crackleFilter) { crackleFilter.dispose(); crackleFilter = null; }
+                if (crackleVolume) { crackleVolume.dispose(); crackleVolume = null; }
+                if (fireOsc) { fireOsc.stop(); fireOsc.dispose(); fireOsc = null; }
+                if (fireLfo) { fireLfo.stop(); fireLfo.dispose(); fireLfo = null; }
+                if (fireVol) { fireVol.dispose(); fireVol = null; }
+            } catch (err) {
+                console.error("Sound stop error:", err);
+            }
+        }
+
+        const display = document.getElementById("time-display");
+        const progressPath = document.getElementById("progress-path");
+        
+        const radius = progressPath.r.baseVal.value;
+        const circumference = radius * 2 * Math.PI;
+        progressPath.style.strokeDasharray = circumference + " " + circumference;
+        progressPath.style.strokeDashoffset = "0";
+
+        function setProgress(percent) {
+            const offset = circumference - (percent / 100) * circumference;
+            progressPath.style.strokeDashoffset = offset.toString();
+        }
+
+        function updateDisplay() {
+            let m = String(Math.floor(timeLeft / 60));
+            if (m.length < 2) m = "0" + m;
+            
+            let s = String(timeLeft % 60);
+            if (s.length < 2) s = "0" + s;
+            
+            display.textContent = m + ":" + s;
+            
+            if (totalTime > 0) {
+                const percent = (timeLeft / totalTime) * 100;
+                setProgress(percent);
+            } else {
+                setProgress(100);
+            }
+
+            if (timeLeft <= 10 && timeLeft > 0 && isRunning) {
+                display.classList.add("warning");
+                progressPath.classList.add("warning-stroke");
+            } else {
+                display.classList.remove("warning");
+                progressPath.classList.remove("warning-stroke");
+            }
+        }
+
+        function applyTime(minutes) {
+            pauseTimer();
+            totalTime = minutes * 60;
+            timeLeft = totalTime;
+            updateDisplay();
+            stopBonfireSound(); 
+        }
+
+        async function startTimer() {
+            if (timeLeft <= 0) return;
+            if (isRunning) return;
+            
+            try {
+                await initAudio();
+                playBonfireSound();
+            } catch(err) {
+                console.log("Audio failed to start:", err);
+            }
+            
+            isRunning = true;
+            timerInterval = setInterval(function() {
+                timeLeft--;
+                updateDisplay();
+                
+                if (timeLeft <= 0) {
+                    finishTimer();
+                }
+            }, 1000);
+        }
+
+        function pauseTimer() {
+            isRunning = false;
+            clearInterval(timerInterval);
+            stopBonfireSound();
+            display.classList.remove("warning");
+            progressPath.classList.remove("warning-stroke");
+        }
+
+        function resetTimer() {
+            pauseTimer();
+            timeLeft = totalTime;
+            updateDisplay();
+        }
+
+        function finishTimer() {
+            pauseTimer();
+            display.textContent = "00:00";
+            
+            const themeColor = getComputedStyle(document.body).getPropertyValue("--accent-color").trim();
+            if (typeof confetti !== "undefined") {
+                confetti({
+                    particleCount: 150,
+                    spread: 120,
+                    origin: { y: 0.5 },
+                    colors: [themeColor, "#ffffff", "#e5e7eb"]
+                });
+            }
+            
+            const titleEl = document.getElementById("main-title");
+            titleEl.textContent = state.finishMsg;
+            setTimeout(function() {
+                titleEl.textContent = state.title;
+            }, 6000);
+        }
+
+        function renderBackgrounds() {
+            const container = document.getElementById("bg-slider");
+            container.innerHTML = "";
+            
+            const activeBgs = state.bgs.filter(function(b) { return b.active; });
+            if (activeBgs.length === 0) {
+                container.style.backgroundColor = "#050505";
+                return;
+            }
+
+            activeBgs.forEach(function(bg, index) {
+                const div = document.createElement("div");
+                div.className = "bg-slide";
+                if(index === currentBgIndex) div.classList.add("active");
+                
+                // 直接使用標準背景載入您 CSV 中的網址
+                div.style.backgroundImage = "url('" + bg.url + "')";
+                
+                container.appendChild(div);
+            });
+        }
+
+        function startBgRotation() {
+            if (bgInterval) clearInterval(bgInterval);
+            if (!state.rotateBg) return;
+
+            bgInterval = setInterval(function() {
+                const activeBgs = state.bgs.filter(function(b) { return b.active; });
+                if (activeBgs.length <= 1) return;
+
+                const slides = document.querySelectorAll(".bg-slide");
+                if (slides.length > 0 && slides[currentBgIndex]) slides[currentBgIndex].classList.remove("active");
+                
+                currentBgIndex = (currentBgIndex + 1) % activeBgs.length;
+                
+                if (slides.length > 0 && slides[currentBgIndex]) slides[currentBgIndex].classList.add("active");
+            }, 15000);
+        }
+
+        function startQuoteRotation() {
+            if (quoteInterval) clearInterval(quoteInterval);
+            const quoteEl = document.getElementById("quote-display");
+            
+            if (state.quotes.length > 0) quoteEl.textContent = state.quotes[0];
+
+            quoteInterval = setInterval(function() {
+                if (state.quotes.length === 0) {
+                    quoteEl.textContent = "";
+                    return;
+                }
+                currentQuoteIndex = (currentQuoteIndex + 1) % state.quotes.length;
+                
+                quoteEl.style.opacity = "0";
+                setTimeout(function() {
+                    quoteEl.textContent = state.quotes[currentQuoteIndex];
+                    quoteEl.style.opacity = "1";
+                }, 600);
+            }, 8000);
+        }
+
+        function renderPresets() {
+            const container = document.getElementById("preset-times");
+            container.innerHTML = "";
+            state.presetTimes.forEach(function(mins) {
+                const btn = document.createElement("button");
+                btn.className = "btn";
+                btn.textContent = mins + " 分鐘";
+                btn.onclick = function() { applyTime(mins); };
+                container.appendChild(btn);
+            });
+            
+            if (timeLeft === 0 && state.presetTimes.length > 0) {
+                applyTime(state.presetTimes[0]);
+            }
+        }
+
+        function toggleSettings() {
+            const drawer = document.getElementById("settings-drawer");
+            drawer.classList.toggle("open");
+            if(drawer.classList.contains("open")) {
+                syncSettingsToDOM();
+            }
+        }
+
+        function syncSettingsToDOM() {
+            document.getElementById("set-title").value = state.title;
+            document.getElementById("set-finish-msg").value = state.finishMsg;
+            document.getElementById("set-quotes").value = state.quotes.join("\n");
+            document.getElementById("set-theme").value = state.theme;
+            document.getElementById("set-font").value = state.font;
+            document.getElementById("set-presets").value = state.presetTimes.join(", ");
+            document.getElementById("set-rotate-bg").checked = state.rotateBg;
+
+            renderSettingsBgList();
+        }
+
+        function renderSettingsBgList() {
+            const list = document.getElementById("bg-list");
+            list.innerHTML = "";
+            state.bgs.forEach(function(bg, idx) {
+                const item = document.createElement("div");
+                item.className = "flex items-center gap-2 mb-2 p-2 bg-gray-800/80 rounded border border-gray-700";
+                
+                const cb = document.createElement("input");
+                cb.type = "checkbox";
+                cb.checked = bg.active;
+                cb.className = "w-4 h-4 cursor-pointer";
+                cb.onchange = function() {
+                    state.bgs[idx].active = cb.checked;
+                    updateSettings(false); 
+                };
+
+                const urlInput = document.createElement("input");
+                urlInput.type = "text";
+                urlInput.className = "pixel-input mb-0 flex-1 text-xs p-1 opacity-70";
+                
+                // 顯示您 CSV 表格裡的圖片網址
+                urlInput.value = bg.url;
+                urlInput.disabled = true;
+
+                item.appendChild(cb);
+                item.appendChild(urlInput);
+
+                if (!bg.isDefault) {
+                    const delBtn = document.createElement("button");
+                    delBtn.className = "text-red-400 hover:text-red-300 font-bold px-2 py-1 bg-red-900/30 rounded";
+                    delBtn.textContent = "X";
+                    delBtn.onclick = function() {
+                        state.bgs.splice(idx, 1);
+                        renderSettingsBgList();
+                        updateSettings(false);
+                    };
+                    item.appendChild(delBtn);
+                }
+
+                list.appendChild(item);
+            });
+        }
+
+        function addBackground() {
+            const input = document.getElementById("new-bg-url");
+            const url = input.value.trim();
+            if (!url) return;
+            
+            const customCount = state.bgs.filter(function(b) { return !b.isDefault; }).length;
+            const msgEl = document.getElementById("bg-msg");
+            
+            if (customCount >= 10) {
+                msgEl.textContent = "超過上限！最多只能新增 10 張自訂圖片。";
+                msgEl.style.color = "#ef4444"; 
+                setTimeout(function(){
+                    msgEl.textContent = "打勾代表加入輪播，最多自訂 10 張。";
+                    msgEl.style.color = "#6b7280";
+                }, 3000);
+                return;
+            }
+
+            state.bgs.push({ url: url, active: true, isDefault: false });
+            input.value = "";
+            
+            msgEl.textContent = "新增成功！";
+            msgEl.style.color = "#4ade80"; 
+            setTimeout(function(){
+                msgEl.textContent = "打勾代表加入輪播，最多自訂 10 張。";
+                msgEl.style.color = "#6b7280";
+            }, 2000);
+            
+            renderSettingsBgList();
+            updateSettings(false);
+        }
+
+        function updateSettings(syncDOM) {
+            if (syncDOM !== false) {
+                state.title = document.getElementById("set-title").value || "游老大的計時器";
+                state.finishMsg = document.getElementById("set-finish-msg").value || "時間到！";
+                
+                const quotesText = document.getElementById("set-quotes").value;
+                state.quotes = quotesText.split("\n").filter(function(q) { return q.trim() !== ""; });
+                
+                state.theme = document.getElementById("set-theme").value;
+                state.font = document.getElementById("set-font").value;
+                state.rotateBg = document.getElementById("set-rotate-bg").checked;
+                
+                const presetStr = document.getElementById("set-presets").value;
+                const parsed = presetStr.split(",").map(function(n) { return parseInt(n.trim()); }).filter(function(n) { return !isNaN(n) && n > 0; });
+                if (parsed.length > 0) state.presetTimes = parsed;
+            }
+
+            saveState();
+            applyTheme();
+        }
+
+        function applyTheme() {
+            document.documentElement.style.setProperty("--font-family", state.font);
+            
+            if (state.theme === "casual") {
+                document.documentElement.style.setProperty("--accent-color", "var(--theme-casual)");
+            } else if (state.theme === "fashion") {
+                document.documentElement.style.setProperty("--accent-color", "var(--theme-fashion)");
+            } else {
+                document.documentElement.style.setProperty("--accent-color", "var(--theme-classic)");
+            }
+
+            document.getElementById("main-title").textContent = state.title;
+
+            renderPresets();
+            renderBackgrounds();
+            startBgRotation();
+        }
+
+        function saveState() {
+            try {
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            } catch (e) {
+                console.warn("Could not save to localStorage", e);
+            }
+        }
+
+        function resetToDefaults() {
+            state = JSON.parse(JSON.stringify(defaultState));
+            saveState();
+            syncSettingsToDOM();
+            applyTheme();
+            loadCSVBackgrounds();
+        }
+
+        // 動態抓取 CSV 檔案中的網址
+        async function loadCSVBackgrounds() {
+            try {
+                // 讀取您提供的 Google Sheets CSV 連結
+                const response = await fetch("https://docs.google.com/spreadsheets/d/e/2PACX-1vSpkD_79yigpm8EoR3i6hOU_H1fjFL_FPn0bFXJRp6o8lsEgfgj42-pI_3HQ5noCaCpDtKbwrdk6-2n/pub?output=csv");
+                const csvText = await response.text();
+                
+                // 解析每一行，並過濾出以 http 開頭的網址
+                const urls = csvText.split(/\r?\n/)
+                                    .map(function(line) { return line.trim(); })
+                                    .filter(function(line) { return line.startsWith("http"); });
+                
+                if (urls.length > 0) {
+                    // 將網址轉為背景資料格式
+                    state.bgs = urls.map(function(url) {
+                        return { url: url, active: true, isDefault: true };
+                    });
+                    saveState();
+                    renderBackgrounds();
+                    // 如果設定面板正開著，順便更新裡面的網址清單
+                    if (document.getElementById("settings-drawer").classList.contains("open")) {
+                        renderSettingsBgList();
+                    }
+                }
+            } catch (error) {
+                console.error("CSV 背景載入失敗:", error);
+            }
+        }
+
+        window.onload = function() {
+            applyTheme();
+            startQuoteRotation();
+            loadCSVBackgrounds(); // 載入畫面時自動取得 CSV 圖片
+        };
+    </script>
+</body>
+</html>

@@ -1,0 +1,1629 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>數位媒體廣告成效數據儀表板</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        line: {
+                            50: '#e6f9ed',
+                            100: '#c3f1d2',
+                            500: '#06C755', // LINE Official Green
+                            600: '#05b34c',
+                            700: '#04903d',
+                            800: '#036d2e',
+                            900: '#024b1f',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'Microsoft JhengHei', 'PingFang TC', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    
+    <!-- Font Awesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- SheetJS (xlsx.full.min.js) for parsing Excel/CSV -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    
+    <!-- Apache ECharts -->
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.4.3/dist/echarts.min.js"></script>
+
+    <style>
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f5f9;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #94a3b8;
+        }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(8px);
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans text-slate-800 antialiased selection:bg-line-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="bg-slate-900 text-white sticky top-0 z-50 border-b border-slate-800 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-line-500 flex items-center justify-center text-white text-xl font-bold shadow-lg shadow-line-500/30">
+                    <i class="fa-solid fa-rectangle-ad"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold tracking-wide flex items-center gap-2">
+                        <span>數位媒體廣告 (Digital Media Ads)</span>
+                        <span class="text-xs px-2 py-0.5 rounded-full bg-line-500/20 text-line-500 font-semibold border border-line-500/30">成效分析儀表板</span>
+                    </h1>
+                    <p class="text-xs text-slate-400">跨平台相容 · 端點隱私安全 · 本機即時解析 · 廣告大數據視覺化</p>
+                </div>
+            </div>
+
+            <!-- Global Quick Actions -->
+            <div class="flex items-center space-x-3">
+                <button onclick="loadDemoData()" class="text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 px-3 py-2 rounded-lg font-medium border border-slate-700 transition flex items-center gap-1.5 shadow-sm">
+                    <i class="fa-solid fa-wand-magic-sparkles text-amber-400"></i>
+                    <span>載入範例資料</span>
+                </button>
+                <button onclick="clearData()" class="text-xs bg-slate-800 hover:bg-rose-900/40 text-slate-300 hover:text-rose-300 px-3 py-2 rounded-lg font-medium border border-slate-700 hover:border-rose-800/50 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-trash-can"></i>
+                    <span>清空數據</span>
+                </button>
+                <div class="h-5 w-px bg-slate-800"></div>
+                <button onclick="exportExcel()" class="text-xs bg-line-500 hover:bg-line-600 text-white px-3.5 py-2 rounded-lg font-medium transition shadow-md shadow-line-500/20 flex items-center gap-1.5">
+                    <i class="fa-solid fa-file-excel"></i>
+                    <span>匯出 Excel 報表</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Notification Toast System -->
+    <div id="toast-container" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+        <!-- Section 1: File Upload & Control Bar -->
+        <section class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                
+                <!-- Drag & Drop Zone -->
+                <div id="drop-zone" class="md:col-span-8 border-2 border-dashed border-slate-300 hover:border-line-500 bg-slate-50 hover:bg-line-50/50 rounded-xl p-4 transition text-center cursor-pointer relative group">
+                    <input type="file" id="file-input" accept=".xlsx, .xls, .csv" class="hidden" onchange="handleFileSelect(event)" />
+                    <div class="flex flex-col sm:flex-row items-center justify-center gap-3">
+                        <div class="w-10 h-10 rounded-full bg-white border border-slate-200 flex items-center justify-center text-line-500 group-hover:scale-110 transition shadow-sm">
+                            <i class="fa-solid fa-cloud-arrow-up text-lg"></i>
+                        </div>
+                        <div class="text-left">
+                            <p class="text-sm font-semibold text-slate-700">拖曳 數位媒體廣告 (Meta / Google / LINE 等) Excel/CSV 檔案至此處，或 <span class="text-line-600 underline underline-offset-2">點擊選擇檔案</span></p>
+                            <p class="text-xs text-slate-400 mt-0.5">支援 `.xlsx`, `.xls`, `.csv` (自動相容跨平台數據欄位，100% 瀏覽器本機解析不傳輸)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Active File & Sheet Selector Status -->
+                <div class="md:col-span-4 bg-slate-50 rounded-xl p-4 border border-slate-200/60 flex flex-col justify-between h-full space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                            <i class="fa-solid fa-database text-line-500"></i> 資料狀態
+                        </span>
+                        <span id="data-badge" class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                            未載入資料
+                        </span>
+                    </div>
+
+                    <div>
+                        <div id="file-info-name" class="text-sm font-bold text-slate-800 truncate">無檔案</div>
+                        <div id="file-info-meta" class="text-xs text-slate-400 mt-0.5">請上傳數位媒體廣告匯出報表或載入範例資料</div>
+                    </div>
+                    </div>
+                </div>
+
+                <!-- Active File & Sheet Selector Status -->
+                <div class="md:col-span-4 bg-slate-50 rounded-xl p-4 border border-slate-200/60 flex flex-col justify-between h-full space-y-2">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-semibold text-slate-500 flex items-center gap-1.5">
+                            <i class="fa-solid fa-database text-line-500"></i> 資料狀態
+                        </span>
+                        <span id="data-badge" class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200">
+                            未載入資料
+                        </span>
+                    </div>
+
+                    <div>
+                        <div id="file-info-name" class="text-sm font-bold text-slate-800 truncate">無檔案</div>
+                        <div id="file-info-meta" class="text-xs text-slate-400 mt-0.5">請上傳 LAP 匯出報表或載入範例資料</div>
+                    </div>
+
+                    <!-- Multi-Sheet Dropdown (Hidden if 1 sheet) -->
+                    <div id="sheet-selector-container" class="hidden flex items-center gap-2 pt-1 border-t border-slate-200/80">
+                        <label for="sheet-select" class="text-xs text-slate-500 whitespace-nowrap">工作表：</label>
+                        <select id="sheet-select" onchange="handleSheetChange()" class="text-xs bg-white border border-slate-300 rounded-md px-2 py-1 focus:ring-1 focus:ring-line-500 w-full font-medium">
+                        </select>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Section 2: Executive Summary KPI Cards -->
+        <section class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            
+            <!-- Total Spend Card -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-line-50 rounded-full group-hover:scale-125 transition duration-500 -z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span>總廣告花費</span>
+                        <i class="fa-solid fa-sack-dollar text-line-500"></i>
+                    </div>
+                    <div id="kpi-spend" class="text-xl font-extrabold text-slate-900 tracking-tight">$0</div>
+                    <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span>TWD (總預算消耗)</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Impressions Card -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-blue-50 rounded-full group-hover:scale-125 transition duration-500 -z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span>總曝光量</span>
+                        <i class="fa-solid fa-eye text-blue-500"></i>
+                    </div>
+                    <div id="kpi-impressions" class="text-xl font-extrabold text-slate-900 tracking-tight">0</div>
+                    <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span>Impressions</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Total Clicks Card -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-indigo-50 rounded-full group-hover:scale-125 transition duration-500 -z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span>總點擊量</span>
+                        <i class="fa-solid fa-hand-pointer text-indigo-500"></i>
+                    </div>
+                    <div id="kpi-clicks" class="text-xl font-extrabold text-slate-900 tracking-tight">0</div>
+                    <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span>Clicks</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overall CTR Card -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-emerald-50 rounded-full group-hover:scale-125 transition duration-500 -z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span>整體點閱率</span>
+                        <i class="fa-solid fa-chart-line text-emerald-500"></i>
+                    </div>
+                    <div id="kpi-ctr" class="text-xl font-extrabold text-slate-900 tracking-tight">0.00%</div>
+                    <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span>Clicks / Impressions</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overall CPC Card -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-amber-50 rounded-full group-hover:scale-125 transition duration-500 -z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span>平均點擊成本</span>
+                        <i class="fa-solid fa-coins text-amber-500"></i>
+                    </div>
+                    <div id="kpi-cpc" class="text-xl font-extrabold text-slate-900 tracking-tight">$0.00</div>
+                    <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span>Cost / Click</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Overall CPM Card -->
+            <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm hover:shadow-md transition relative overflow-hidden group">
+                <div class="absolute -right-2 -bottom-2 w-16 h-16 bg-purple-50 rounded-full group-hover:scale-125 transition duration-500 -z-0"></div>
+                <div class="relative z-10">
+                    <div class="flex items-center justify-between text-slate-400 text-xs font-medium mb-1">
+                        <span>千次曝光成本</span>
+                        <i class="fa-solid fa-bullhorn text-purple-500"></i>
+                    </div>
+                    <div id="kpi-cpm" class="text-xl font-extrabold text-slate-900 tracking-tight">$0.00</div>
+                    <div class="text-[11px] text-slate-400 mt-1 flex items-center gap-1">
+                        <span>CPM (TWD)</span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Section 3: Interactive Filter Bar -->
+        <section class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+            <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-filter text-line-500"></i>
+                    <h2 class="text-sm font-bold text-slate-800">多維度動態篩選器</h2>
+                    <span id="filter-count-badge" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 font-semibold">
+                        符合 0 / 0 筆廣告
+                    </span>
+                </div>
+                <button onclick="resetFilters()" class="text-xs text-slate-500 hover:text-line-600 hover:underline flex items-center gap-1">
+                    <i class="fa-solid fa-arrow-rotate-left"></i> 重置所有篩選
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                
+                <!-- Campaign Selector -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">行銷活動 (Campaign)</label>
+                    <select id="filter-campaign" onchange="applyFilters()" class="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-line-500 focus:bg-white transition">
+                        <option value="ALL">全部行銷活動</option>
+                    </select>
+                </div>
+
+                <!-- Ad Group Selector -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">廣告群組 (Ad Group)</label>
+                    <select id="filter-adgroup" onchange="applyFilters()" class="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-line-500 focus:bg-white transition">
+                        <option value="ALL">全部廣告群組</option>
+                    </select>
+                </div>
+
+                <!-- Configured Status Selector -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">設定狀態 (Configured)</label>
+                    <select id="filter-status" onchange="applyFilters()" class="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-line-500 focus:bg-white transition">
+                        <option value="ALL">全部狀態</option>
+                        <option value="ACTIVE">ACTIVE (進行中)</option>
+                        <option value="PAUSED">PAUSED (已暫停)</option>
+                    </select>
+                </div>
+
+                <!-- Ad Format Selector -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">廣告格式 (Format)</label>
+                    <select id="filter-format" onchange="applyFilters()" class="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 focus:ring-2 focus:ring-line-500 focus:bg-white transition">
+                        <option value="ALL">全部格式</option>
+                        <option value="IMAGE">IMAGE (圖片)</option>
+                        <option value="SMALL_IMAGE">SMALL_IMAGE (小圖)</option>
+                        <option value="VIDEO">VIDEO (影片)</option>
+                    </select>
+                </div>
+
+                <!-- Search Keyword -->
+                <div>
+                    <label class="block text-xs font-semibold text-slate-600 mb-1">關鍵字搜尋</label>
+                    <div class="relative">
+                        <input type="text" id="filter-search" oninput="applyFilters()" placeholder="搜尋廣告名稱、ID、標題..." class="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-2.5 pl-8 focus:ring-2 focus:ring-line-500 focus:bg-white transition">
+                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-3 text-slate-400 text-xs"></i>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- Section 4: ECharts Visualizations -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            
+            <!-- Chart 1: Campaign Performance Dual Axis -->
+            <div class="lg:col-span-8 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-chart-column text-line-500"></i>
+                        <h3 class="text-sm font-bold text-slate-800">行銷活動成效對比 (Campaign Overview)</h3>
+                    </div>
+                    <span class="text-xs text-slate-400">花費 / 點擊數 (主軸) vs. 點閱率 % (副軸)</span>
+                </div>
+                <div id="chart-campaign" class="w-full h-80"></div>
+            </div>
+
+            <!-- Chart 2: Format ROI Comparison -->
+            <div class="lg:col-span-4 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-photo-film text-indigo-500"></i>
+                        <h3 class="text-sm font-bold text-slate-800">廣告格式效益 (Format ROI)</h3>
+                    </div>
+                    <span class="text-xs text-slate-400">Cost / CTR / CPC</span>
+                </div>
+                <div id="chart-format" class="w-full h-80"></div>
+            </div>
+
+            <!-- Chart 3: Ad Group Treemap -->
+            <div class="lg:col-span-5 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-sitemap text-amber-500"></i>
+                        <h3 class="text-sm font-bold text-slate-800">廣告群組預算分配 (Ad Group Treemap)</h3>
+                    </div>
+                    <span class="text-xs text-slate-400">區塊大小代表總花費 ($)</span>
+                </div>
+                <div id="chart-adgroup" class="w-full h-80"></div>
+            </div>
+
+            <!-- Chart 4: Creative Scatter Quadrant Analysis -->
+            <div class="lg:col-span-7 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm flex flex-col justify-between">
+                <div class="flex items-center justify-between mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-border-all text-emerald-500"></i>
+                        <h3 class="text-sm font-bold text-slate-800">素材成效四象限矩陣圖 (CTR vs. CPC)</h3>
+                    </div>
+                    <div class="flex items-center gap-2 text-xs text-slate-500">
+                        <span class="inline-block w-2.5 h-2.5 rounded-full bg-line-500"></span> 泡泡大小 = 花費金額
+                    </div>
+                </div>
+                <div id="chart-quadrant" class="w-full h-80"></div>
+            </div>
+
+            <!-- Chart 5: Top / Bottom 10 Ranking -->
+            <div class="lg:col-span-12 bg-white p-5 rounded-2xl border border-slate-200/80 shadow-sm">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-4">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-ranking-star text-rose-500"></i>
+                        <h3 class="text-sm font-bold text-slate-800">素材成效排行榜 (Creative Performance Rankings)</h3>
+                    </div>
+                    
+                    <!-- Controls for Ranking -->
+                    <div class="flex items-center gap-3">
+                        <div class="bg-slate-100 p-1 rounded-lg flex gap-1">
+                            <button id="rank-type-top" onclick="setRankType('top')" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm transition">Top 10 (最佳)</button>
+                            <button id="rank-type-bottom" onclick="setRankType('bottom')" class="px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-800 transition">Bottom 10 (需優化)</button>
+                        </div>
+                        <div class="bg-slate-100 p-1 rounded-lg flex gap-1">
+                            <button id="rank-metric-ctr" onclick="setRankMetric('ctr')" class="px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm transition">點閱率 CTR %</button>
+                            <button id="rank-metric-clicks" onclick="setRankMetric('clicks')" class="px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-800 transition">點擊數 Clicks</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="chart-ranking" class="w-full h-80"></div>
+            </div>
+
+        </div>
+
+        <!-- Section 5: Creative Copy Analytics & Grid View -->
+        <section class="space-y-6">
+            
+            <!-- Headline / Copy Insights -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-align-left text-line-500"></i>
+                        <h2 class="text-sm font-bold text-slate-800">廣告標題文案成效排行 (Headline Insights)</h2>
+                    </div>
+                    <span class="text-xs text-slate-400">彙整相同文案之平均點閱率與點擊成本</span>
+                </div>
+
+                <div id="headline-insights-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Dynamic headline analytics cards inserted here -->
+                </div>
+            </div>
+
+            <!-- Creative Cards Preview Grid -->
+            <div class="bg-white rounded-2xl p-5 border border-slate-200/80 shadow-sm space-y-4">
+                <div class="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-border-top-left text-indigo-500"></i>
+                        <h2 class="text-sm font-bold text-slate-800">素材文案圖覽 (Creative Cards Grid)</h2>
+                    </div>
+                    <div class="text-xs text-slate-500">
+                        目前顯示前 <span id="creative-card-count">0</span> 個關鍵素材
+                    </div>
+                </div>
+
+                <div id="creative-cards-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <!-- Dynamic creative cards inserted here -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Section 6: Detailed Data Table & Export -->
+        <section class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+            <div class="p-5 border-b border-slate-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50/50">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-table text-slate-700"></i>
+                    <h2 class="text-sm font-bold text-slate-800">廣告明細數據資料表</h2>
+                </div>
+
+                <div class="flex flex-wrap items-center gap-3">
+                    <div class="flex items-center gap-2">
+                        <label class="text-xs text-slate-500">每頁顯示：</label>
+                        <select id="table-page-size" onchange="changePageSize()" class="text-xs bg-white border border-slate-200 rounded-lg p-1.5 focus:ring-1 focus:ring-line-500 font-medium">
+                            <option value="10">10 筆</option>
+                            <option value="25" selected>25 筆</option>
+                            <option value="50">50 筆</option>
+                        </select>
+                    </div>
+
+                    <button onclick="exportCSV()" class="text-xs bg-white hover:bg-slate-100 text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 font-medium transition flex items-center gap-1.5">
+                        <i class="fa-solid fa-file-csv text-blue-600"></i>
+                        <span>導出 CSV</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Table Container -->
+            <div class="overflow-x-auto">
+                <table class="w-full text-left border-collapse text-xs">
+                    <thead>
+                        <tr class="bg-slate-100/80 text-slate-600 uppercase tracking-wider font-semibold border-b border-slate-200">
+                            <th onclick="sortTable('campaignName')" class="p-3 cursor-pointer hover:bg-slate-200/60 transition">
+                                行銷活動 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('adGroupName')" class="p-3 cursor-pointer hover:bg-slate-200/60 transition">
+                                廣告群組 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('title')" class="p-3 cursor-pointer hover:bg-slate-200/60 transition">
+                                素材標題 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('adFormat')" class="p-3 cursor-pointer hover:bg-slate-200/60 transition">
+                                格式 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('configuredStatus')" class="p-3 cursor-pointer hover:bg-slate-200/60 transition">
+                                狀態 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('cost')" class="p-3 text-right cursor-pointer hover:bg-slate-200/60 transition">
+                                花費 (TWD) <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('impressions')" class="p-3 text-right cursor-pointer hover:bg-slate-200/60 transition">
+                                曝光量 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('clicks')" class="p-3 text-right cursor-pointer hover:bg-slate-200/60 transition">
+                                點擊數 <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('ctr')" class="p-3 text-right cursor-pointer hover:bg-slate-200/60 transition">
+                                點閱率 CTR <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                            <th onclick="sortTable('cpc')" class="p-3 text-right cursor-pointer hover:bg-slate-200/60 transition">
+                                CPC <i class="fa-solid fa-sort text-slate-400 ml-1"></i>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="table-body" class="divide-y divide-slate-100 text-slate-700">
+                        <!-- Dynamic table rows -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Table Pagination Footer -->
+            <div class="p-4 border-t border-slate-200/80 bg-slate-50/50 flex flex-col sm:flex-row items-center justify-between gap-3">
+                <div id="table-pagination-info" class="text-xs text-slate-500">
+                    顯示 0 - 0 筆，共 0 筆
+                </div>
+                <div class="flex items-center space-x-1" id="table-pagination-buttons">
+                    <!-- Dynamic Pagination Buttons -->
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 text-slate-400 text-xs py-6 border-t border-slate-800 mt-10">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center space-y-2">
+            <p class="font-medium text-slate-300">數位媒體廣告 (Digital Media Ads) Report Analytics Dashboard</p>
+            <p class="text-slate-500">專為數據分析師與廣告優化師打造 · 支援跨平台報表彙整 · 本機純 JavaScript 運算</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Application Core Logic -->
+    <script>
+        /**
+         * Global Application State Management
+         */
+        const state = {
+            rawData: [],
+            filteredData: [],
+            currentFileName: '無檔案',
+            availableSheets: [],
+            selectedSheet: '',
+            sortColumn: 'cost',
+            sortDirection: 'desc',
+            currentPage: 1,
+            pageSize: 25,
+            rankType: 'top',      // 'top' | 'bottom'
+            rankMetric: 'ctr',     // 'ctr' | 'clicks'
+            charts: {
+                campaign: null,
+                format: null,
+                adGroup: null,
+                quadrant: null,
+                ranking: null
+            }
+        };
+
+        /**
+         * Rich Default Demo Dataset for Instant Preview (Multi-Platform Ads)
+         */
+        const DEMO_DATA = [
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[Meta] 2026_精華液_明星商品_主圖A', adId: 'AD001',
+                adGroupName: '25-40歲女性_美妝興趣', adGroupId: 'AG01',
+                campaignName: '2026_Q3_雙11預熱促銷_轉換型', campaignId: 'CP01',
+                adFormat: 'IMAGE', title: '🔥 限時3折！這款明星精華液評價破萬', description: '年度最大檔下殺，輸入優惠碼【PROMO2026】再享免運，數量有限售完為止！',
+                reach: 125000, impressions: 185000, clicks: 3515, ctr: 0.0190, cpc: 4.2, cost: 14763
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[Meta] 2026_精華液_肌膚煥膚_短影音', adId: 'AD002',
+                adGroupName: '25-40歲女性_美妝興趣', adGroupId: 'AG01',
+                campaignName: '2026_Q3_雙11預熱促銷_轉換型', campaignId: 'CP01',
+                adFormat: 'VIDEO', title: '告別暗沉！夏日極致透亮保養術', description: '專業皮膚科醫師推薦，3天感有感的煥膚魔法，了解更多優惠細節。',
+                reach: 98000, impressions: 142000, clicks: 3834, ctr: 0.0270, cpc: 3.5, cost: 13419
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[Google] 2026_3C旗艦機_回應式搜尋_小圖', adId: 'AD003',
+                adGroupName: '30-50歲男性_3C數位', adGroupId: 'AG02',
+                campaignName: '2026_年度旗艦新品發表_導流型', campaignId: 'CP02',
+                adFormat: 'SMALL_IMAGE', title: '全新旗艦機款降臨，點擊預約體驗', description: '全台限量開賣，送原廠配件組與購物金 1000 元回饋！',
+                reach: 210000, impressions: 320000, clicks: 3520, ctr: 0.0110, cpc: 7.8, cost: 27456
+            },
+            {
+                configuredStatus: 'PAUSED', status: 'NOT_DELIVERING',
+                adName: '[Google] 2026_3C旗艦機_規格比較_圖片', adId: 'AD004',
+                adGroupName: '30-50歲男性_3C數位', adGroupId: 'AG02',
+                campaignName: '2026_年度旗艦新品發表_導流型', campaignId: 'CP02',
+                adFormat: 'IMAGE', title: '全新旗艦機款降臨，點擊預約體驗', description: '全台限量開賣，送原廠配件組與購物金 1000 元回饋！',
+                reach: 65000, impressions: 89000, clicks: 623, ctr: 0.0070, cpc: 12.5, cost: 77875
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[LINE] 2026_新客禮_200折價券_大圖', adId: 'AD005',
+                adGroupName: '廣泛受眾_全台20-60歲', adGroupId: 'AG03',
+                campaignName: '2026_新客加入優惠禮_擴散型', campaignId: 'CP03',
+                adFormat: 'IMAGE', title: '領取新客專屬優惠，免費獲得 $200 折價券', description: '新客專屬限定優惠！點擊領取現折折價券，即刻享受尊榮折扣。',
+                reach: 340000, impressions: 510000, clicks: 12240, ctr: 0.0240, cpc: 2.8, cost: 34272
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[LINE] 2026_新客禮_200折價券_小圖B', adId: 'AD006',
+                adGroupName: '廣泛受眾_全台20-60歲', adGroupId: 'AG03',
+                campaignName: '2026_新客加入優惠禮_擴散型', campaignId: 'CP03',
+                adFormat: 'SMALL_IMAGE', title: '領取新客專屬優惠，免費獲得 $200 折價券', description: '新客專屬限定優惠！點擊領取現折折價券，即刻享受尊榮折扣。',
+                reach: 180000, impressions: 260000, clicks: 4680, ctr: 0.0180, cpc: 3.2, cost: 14976
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[TikTok] 2026_家電體驗_短影音開箱_影片', adId: 'AD007',
+                adGroupName: '自訂受眾_官網訪客30天', adGroupId: 'AG04',
+                campaignName: '2026_會員回購促銷_再行銷', campaignId: 'CP04',
+                adFormat: 'VIDEO', title: '【限時免費試用】質感家電宅配到家', description: '立即申請體驗，不滿意退費，全台免運配送中！',
+                reach: 75000, impressions: 110000, clicks: 3520, ctr: 0.0320, cpc: 5.1, cost: 17952
+            },
+            {
+                configuredStatus: 'PAUSED', status: 'NOT_DELIVERING',
+                adName: '[TikTok] 2026_VIP回購_點數雙倍_圖片', adId: 'AD008',
+                adGroupName: '自訂受眾_官網訪客30天', adGroupId: 'AG04',
+                campaignName: '2026_會員回購促銷_再行銷', campaignId: 'CP04',
+                adFormat: 'IMAGE', title: 'VIP獨享！年終感恩回饋特賣會', description: '舊客專屬回饋方案，滿千折百點數雙倍送，快點擊選購！',
+                reach: 42000, impressions: 68000, clicks: 544, ctr: 0.0080, cpc: 14.2, cost: 7724
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[Meta] 2026_精華液_口碑推薦_小圖', adId: 'AD009',
+                adGroupName: '核心顧客類似受眾1%', adGroupId: 'AG05',
+                campaignName: '2026_Q3_雙11預熱促銷_轉換型', campaignId: 'CP01',
+                adFormat: 'SMALL_IMAGE', title: '🔥 限時3折！這款明星精華液評價破萬', description: '年度最大檔下殺，輸入優惠碼【PROMO2026】再享免運，數量有限售完為止！',
+                reach: 112000, impressions: 165000, clicks: 3465, ctr: 0.0210, cpc: 3.9, cost: 13513
+            },
+            {
+                configuredStatus: 'ACTIVE', status: 'DELIVERING',
+                adName: '[Meta] 2026_家電體驗_舊客優惠_大圖', adId: 'AD010',
+                adGroupName: '核心顧客類似受眾1%', adGroupId: 'AG05',
+                campaignName: '2026_會員回購促銷_再行銷', campaignId: 'CP04',
+                adFormat: 'IMAGE', title: '【限時免費試用】質感家電宅配到家', description: '立即申請體驗，不滿意退費，全台免運配送中！',
+                reach: 95000, impressions: 138000, clicks: 3036, ctr: 0.0220, cpc: 4.8, cost: 14572
+            }
+        ];
+
+        /**
+         * Initialize App on Window Load
+         */
+        window.addEventListener('DOMContentLoaded', () => {
+            initChartInstances();
+            setupDragAndDrop();
+            loadDemoData(); // Pre-load demo dataset for instant interactivity
+            
+            window.addEventListener('resize', () => {
+                Object.values(state.charts).forEach(chart => chart && chart.resize());
+            });
+        });
+
+        /**
+         * Toast Notification Helper
+         */
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const bgClass = type === 'success' ? 'bg-line-600 text-white' : 
+                            type === 'error' ? 'bg-rose-600 text-white' : 
+                            'bg-slate-800 text-white';
+            const icon = type === 'success' ? 'fa-circle-check' : 
+                         type === 'error' ? 'fa-circle-exclamation' : 'fa-circle-info';
+
+            toast.className = `pointer-events-auto flex items-center gap-2 px-4 py-3 rounded-xl shadow-lg text-xs font-medium ${bgClass} transition-all duration-300 transform translate-y-2 opacity-0`;
+            toast.innerHTML = `<i class="fa-solid ${icon}"></i><span>${message}</span>`;
+            
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-2', 'opacity-0');
+            }, 10);
+
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'translate-y-2');
+                setTimeout(() => toast.remove(), 300);
+            }, 3500);
+        }
+
+        /**
+         * Drag & Drop File Upload Handling
+         */
+        function setupDragAndDrop() {
+            const dropZone = document.getElementById('drop-zone');
+
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }, false);
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.add('border-line-500', 'bg-line-50/80');
+                }, false);
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropZone.addEventListener(eventName, () => {
+                    dropZone.classList.remove('border-line-500', 'bg-line-50/80');
+                }, false);
+            });
+
+            dropZone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                if (files.length) {
+                    processUploadedFile(files[0]);
+                }
+            });
+
+            dropZone.addEventListener('click', () => {
+                document.getElementById('file-input').click();
+            });
+        }
+
+        function handleFileSelect(event) {
+            const files = event.target.files;
+            if (files.length) {
+                processUploadedFile(files[0]);
+            }
+        }
+
+        /**
+         * Read and Parse Uploaded File with SheetJS
+         */
+        function processUploadedFile(file) {
+            state.currentFileName = file.name;
+            const reader = new FileReader();
+
+            reader.onload = function(e) {
+                try {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    state.availableSheets = workbook.SheetNames;
+                    const sheetContainer = document.getElementById('sheet-selector-container');
+                    const sheetSelect = document.getElementById('sheet-select');
+
+                    if (workbook.SheetNames.length > 1) {
+                        sheetContainer.classList.remove('hidden');
+                        sheetSelect.innerHTML = workbook.SheetNames.map(name => 
+                            `<option value="${name}">${name}</option>`
+                        ).join('');
+                    } else {
+                        sheetContainer.classList.add('hidden');
+                    }
+
+                    state.selectedSheet = workbook.SheetNames[0];
+                    parseSheetData(workbook, state.selectedSheet);
+                    showToast(`成功讀取檔案: ${file.name}`, 'success');
+                } catch (err) {
+                    console.error(err);
+                    showToast('檔案解析失敗，請確認是否為有效的廣告數據 Excel/CSV 檔案', 'error');
+                }
+            };
+
+            reader.readAsArrayBuffer(file);
+        }
+
+        function handleSheetChange() {
+            const sheetSelect = document.getElementById('sheet-select');
+            state.selectedSheet = sheetSelect.value;
+            // Re-read active workbook if stored or reload
+            showToast(`已切換至工作表: ${state.selectedSheet}`, 'info');
+        }
+
+        /**
+         * Normalizing Column Headers (Chinese & English LAP Schema)
+         */
+        function parseSheetData(workbook, sheetName) {
+            const worksheet = workbook.Sheets[sheetName];
+            const jsonRows = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+            const parsed = jsonRows.map(row => normalizeRow(row));
+            state.rawData = parsed;
+            
+            updateFileInfoBadge(state.currentFileName, parsed.length, '本機解析完成');
+            populateFilterOptions();
+            applyFilters();
+        }
+
+        /**
+         * Helper to Safe Extract & Clean Row Data
+         */
+        function normalizeRow(rawRow) {
+            const getVal = (keys) => {
+                for (let k of keys) {
+                    if (rawRow[k] !== undefined && rawRow[k] !== null && rawRow[k] !== '') {
+                        return rawRow[k];
+                    }
+                }
+                return null;
+            };
+
+            const parseNum = (val) => {
+                if (val === null || val === undefined || val === '') return 0;
+                if (typeof val === 'number') return isNaN(val) ? 0 : val;
+                let str = String(val).replace(/[\$,%]/g, '').trim();
+                let n = parseFloat(str);
+                return isNaN(n) ? 0 : n;
+            };
+
+            let ctrRaw = getVal(['CTR (click-through rate)', '點閱率', 'CTR', '點擊率']);
+            let ctrVal = 0;
+            if (ctrRaw !== null) {
+                if (typeof ctrRaw === 'string' && ctrRaw.includes('%')) {
+                    ctrVal = parseNum(ctrRaw) / 100;
+                } else {
+                    let parsed = parseNum(ctrRaw);
+                    ctrVal = parsed > 1 ? parsed / 100 : parsed;
+                }
+            }
+
+            let cost = parseNum(getVal(['Cost', '費用', '總花費', '花費', 'Spend']));
+            let impressions = parseNum(getVal(['Impressions', '曝光數', '曝光量']));
+            let clicks = parseNum(getVal(['Clicks', '點擊數', '點擊量']));
+            let reach = parseNum(getVal(['Reach (estimated)', '估計觸及數', 'Reach', '觸及數']));
+            let cpcRaw = parseNum(getVal(['CPC (cost per click)', '點擊成本', 'CPC']));
+
+            if (ctrVal === 0 && impressions > 0 && clicks > 0) {
+                ctrVal = clicks / impressions;
+            }
+            let cpcVal = cpcRaw > 0 ? cpcRaw : (clicks > 0 ? cost / clicks : 0);
+
+            return {
+                configuredStatus: String(getVal(['Configured status', '設定狀態', 'Configured Status']) || 'ACTIVE').toUpperCase(),
+                status: String(getVal(['Status', '投放狀態', 'Delivery Status']) || 'DELIVERING'),
+                adName: String(getVal(['Ad name', '廣告名稱', 'Ad Name']) || 'N/A'),
+                adId: String(getVal(['Ad ID', '廣告 ID', 'Ad Id']) || 'N/A'),
+                adGroupName: String(getVal(['Ad group name', '廣告群組名稱', 'Ad Group Name']) || '未分類群組'),
+                adGroupId: String(getVal(['Ad group ID', '廣告群組 ID', 'Ad Group Id']) || 'N/A'),
+                campaignName: String(getVal(['Campaign name', '行銷活動名稱', 'Campaign Name']) || '預設行銷活動'),
+                campaignId: String(getVal(['Campaign ID', '行銷活動 ID', 'Campaign Id']) || 'N/A'),
+                adFormat: String(getVal(['Ad format', '廣告格式', 'Format']) || 'IMAGE').toUpperCase(),
+                title: String(getVal(['Title', '廣告標題', '標題']) || '無標題素材'),
+                description: String(getVal(['Description', '廣告文案', '描述', 'Ad Description']) || '無文案描述'),
+                reach: reach,
+                impressions: impressions,
+                clicks: clicks,
+                ctr: ctrVal,
+                cpc: cpcVal,
+                cost: cost,
+                cpm: impressions > 0 ? (cost / impressions) * 1000 : 0
+            };
+        }
+
+        /**
+         * Load Default Demo Data
+         */
+        function loadDemoData() {
+            state.rawData = [...DEMO_DATA];
+            state.currentFileName = 'Digital_Ad_Performance_Sample.xlsx';
+            updateFileInfoBadge(state.currentFileName, DEMO_DATA.length, '預設範例資料');
+            populateFilterOptions();
+            applyFilters();
+            showToast('已成功載入數位媒體廣告範例數據！', 'success');
+        }
+
+        /**
+         * Clear All Data
+         */
+        function clearData() {
+            state.rawData = [];
+            state.filteredData = [];
+            state.currentFileName = '無檔案';
+            updateFileInfoBadge('無檔案', 0, '未載入資料');
+            populateFilterOptions();
+            applyFilters();
+            showToast('已清空所有報表資料', 'info');
+        }
+
+        function updateFileInfoBadge(fileName, count, statusText) {
+            document.getElementById('file-info-name').innerText = fileName;
+            document.getElementById('file-info-meta').innerText = `包含 ${count} 筆廣告素材紀錄 · ${statusText}`;
+            const badge = document.getElementById('data-badge');
+            if (count > 0) {
+                badge.innerText = `已載入 (${count} 筆)`;
+                badge.className = "text-xs font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200";
+            } else {
+                badge.innerText = "未載入資料";
+                badge.className = "text-xs font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-200";
+            }
+        }
+
+        /**
+         * Populate Dynamic Filter Selectors
+         */
+        function populateFilterOptions() {
+            const campaigns = [...new Set(state.rawData.map(d => d.campaignName))].filter(Boolean);
+            const adGroups = [...new Set(state.rawData.map(d => d.adGroupName))].filter(Boolean);
+
+            const campaignSelect = document.getElementById('filter-campaign');
+            const adGroupSelect = document.getElementById('filter-adgroup');
+
+            const currentCampaign = campaignSelect.value;
+            const currentAdGroup = adGroupSelect.value;
+
+            campaignSelect.innerHTML = `<option value="ALL">全部行銷活動 (${campaigns.length})</option>` + 
+                campaigns.map(c => `<option value="${c}">${c}</option>`).join('');
+
+            adGroupSelect.innerHTML = `<option value="ALL">全部廣告群組 (${adGroups.length})</option>` + 
+                adGroups.map(ag => `<option value="${ag}">${ag}</option>`).join('');
+
+            if (campaigns.includes(currentCampaign)) campaignSelect.value = currentCampaign;
+            if (adGroups.includes(currentAdGroup)) adGroupSelect.value = currentAdGroup;
+        }
+
+        /**
+         * Apply Filters to Raw Data
+         */
+        function applyFilters() {
+            const campaignFilter = document.getElementById('filter-campaign').value;
+            const adGroupFilter = document.getElementById('filter-adgroup').value;
+            const statusFilter = document.getElementById('filter-status').value;
+            const formatFilter = document.getElementById('filter-format').value;
+            const searchKeyword = document.getElementById('filter-search').value.toLowerCase().trim();
+
+            state.filteredData = state.rawData.filter(item => {
+                if (campaignFilter !== 'ALL' && item.campaignName !== campaignFilter) return false;
+                if (adGroupFilter !== 'ALL' && item.adGroupName !== adGroupFilter) return false;
+                if (statusFilter !== 'ALL' && item.configuredStatus !== statusFilter) return false;
+                if (formatFilter !== 'ALL' && item.adFormat !== formatFilter) return false;
+                
+                if (searchKeyword) {
+                    const matchName = item.adName.toLowerCase().includes(searchKeyword);
+                    const matchId = item.adId.toLowerCase().includes(searchKeyword);
+                    const matchTitle = item.title.toLowerCase().includes(searchKeyword);
+                    const matchDesc = item.description.toLowerCase().includes(searchKeyword);
+                    if (!matchName && !matchId && !matchTitle && !matchDesc) return false;
+                }
+                return true;
+            });
+
+            document.getElementById('filter-count-badge').innerText = `符合 ${state.filteredData.length} / ${state.rawData.length} 筆廣告`;
+
+            // Trigger Re-render across all modules
+            renderKPIs();
+            renderCharts();
+            renderHeadlineInsights();
+            renderCreativeCards();
+            renderTable();
+        }
+
+        function resetFilters() {
+            document.getElementById('filter-campaign').value = 'ALL';
+            document.getElementById('filter-adgroup').value = 'ALL';
+            document.getElementById('filter-status').value = 'ALL';
+            document.getElementById('filter-format').value = 'ALL';
+            document.getElementById('filter-search').value = '';
+            applyFilters();
+            showToast('已重置所有篩選條件', 'info');
+        }
+
+        /**
+         * Render Executive Summary KPI Cards
+         */
+        function renderKPIs() {
+            const data = state.filteredData;
+            
+            const totalSpend = data.reduce((acc, row) => acc + row.cost, 0);
+            const totalImpressions = data.reduce((acc, row) => acc + row.impressions, 0);
+            const totalClicks = data.reduce((acc, row) => acc + row.clicks, 0);
+
+            const overallCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 0;
+            const overallCPC = totalClicks > 0 ? totalSpend / totalClicks : 0;
+            const overallCPM = totalImpressions > 0 ? (totalSpend / totalImpressions) * 1000 : 0;
+
+            document.getElementById('kpi-spend').innerText = `$${Math.round(totalSpend).toLocaleString()}`;
+            document.getElementById('kpi-impressions').innerText = totalImpressions.toLocaleString();
+            document.getElementById('kpi-clicks').innerText = totalClicks.toLocaleString();
+            document.getElementById('kpi-ctr').innerText = `${overallCTR.toFixed(2)}%`;
+            document.getElementById('kpi-cpc').innerText = `$${overallCPC.toFixed(2)}`;
+            document.getElementById('kpi-cpm').innerText = `$${overallCPM.toFixed(2)}`;
+        }
+
+        /**
+         * Initialize Chart Instances
+         */
+        function initChartInstances() {
+            state.charts.campaign = echarts.init(document.getElementById('chart-campaign'));
+            state.charts.format = echarts.init(document.getElementById('chart-format'));
+            state.charts.adGroup = echarts.init(document.getElementById('chart-adgroup'));
+            state.charts.quadrant = echarts.init(document.getElementById('chart-quadrant'));
+            state.charts.ranking = echarts.init(document.getElementById('chart-ranking'));
+        }
+
+        /**
+         * Master Chart Render Coordinator
+         */
+        function renderCharts() {
+            renderCampaignChart();
+            renderFormatChart();
+            renderAdGroupChart();
+            renderQuadrantChart();
+            renderRankingChart();
+        }
+
+        /**
+         * Chart 1: Campaign Performance Dual Axis Bar/Line Chart
+         */
+        function renderCampaignChart() {
+            const data = state.filteredData;
+            const campaigns = [...new Set(data.map(d => d.campaignName))];
+
+            const campaignStats = campaigns.map(c => {
+                const sub = data.filter(d => d.campaignName === c);
+                const spend = sub.reduce((acc, r) => acc + r.cost, 0);
+                const clicks = sub.reduce((acc, r) => acc + r.clicks, 0);
+                const imps = sub.reduce((acc, r) => acc + r.impressions, 0);
+                const ctr = imps > 0 ? (clicks / imps) * 100 : 0;
+                return { name: c, spend, clicks, ctr };
+            });
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        let rel = `<div class="font-bold text-slate-800 mb-1">${params[0].name}</div>`;
+                        params.forEach(p => {
+                            let val = p.seriesName.includes('CTR') ? `${p.value.toFixed(2)}%` : 
+                                      p.seriesName.includes('花費') ? `$${Math.round(p.value).toLocaleString()}` : 
+                                      p.value.toLocaleString();
+                            rel += `<div class="flex justify-between gap-4 text-xs">
+                                <span>${p.marker} ${p.seriesName}:</span>
+                                <span class="font-semibold">${val}</span>
+                            </div>`;
+                        });
+                        return rel;
+                    }
+                },
+                legend: { data: ['廣告花費 ($)', '點擊數 (Clicks)', '點閱率 CTR (%)'], top: 0, textStyle: { fontSize: 11 } },
+                grid: { left: '3%', right: '4%', bottom: '10%', top: '15%', containLabel: true },
+                xAxis: [{
+                    type: 'category',
+                    data: campaignStats.map(s => s.name),
+                    axisLabel: {
+                        interval: 0,
+                        rotate: campaignStats.length > 3 ? 20 : 0,
+                        formatter: val => val.length > 12 ? val.substring(0, 10) + '...' : val,
+                        fontSize: 10
+                    }
+                }],
+                yAxis: [
+                    { type: 'value', name: '金額 / 次數', axisLabel: { fontSize: 10 } },
+                    { type: 'value', name: 'CTR (%)', axisLabel: { formatter: '{value}%', fontSize: 10 }, splitLine: { show: false } }
+                ],
+                series: [
+                    {
+                        name: '廣告花費 ($)', type: 'bar',
+                        data: campaignStats.map(s => s.spend),
+                        itemStyle: { color: '#06C755', borderRadius: [4, 4, 0, 0] }
+                    },
+                    {
+                        name: '點擊數 (Clicks)', type: 'bar',
+                        data: campaignStats.map(s => s.clicks),
+                        itemStyle: { color: '#6366f1', borderRadius: [4, 4, 0, 0] }
+                    },
+                    {
+                        name: '點閱率 CTR (%)', type: 'line', yAxisIndex: 1,
+                        data: campaignStats.map(s => s.ctr),
+                        symbolSize: 8,
+                        lineStyle: { width: 3, color: '#f59e0b' },
+                        itemStyle: { color: '#f59e0b' }
+                    }
+                ]
+            };
+
+            state.charts.campaign.setOption(option, true);
+        }
+
+        /**
+         * Chart 2: Format ROI Comparison Bar Chart
+         */
+        function renderFormatChart() {
+            const data = state.filteredData;
+            const formats = ['IMAGE', 'SMALL_IMAGE', 'VIDEO'];
+
+            const formatStats = formats.map(f => {
+                const sub = data.filter(d => d.adFormat === f);
+                const spend = sub.reduce((acc, r) => acc + r.cost, 0);
+                const clicks = sub.reduce((acc, r) => acc + r.clicks, 0);
+                const imps = sub.reduce((acc, r) => acc + r.impressions, 0);
+                const ctr = imps > 0 ? (clicks / imps) * 100 : 0;
+                const cpc = clicks > 0 ? spend / clicks : 0;
+                return { name: f, spend, ctr, cpc };
+            });
+
+            const option = {
+                tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
+                legend: { data: ['平均 CTR (%)', '平均 CPC ($)'], top: 0, textStyle: { fontSize: 11 } },
+                grid: { left: '3%', right: '3%', bottom: '5%', top: '15%', containLabel: true },
+                xAxis: { type: 'category', data: formats, axisLabel: { fontSize: 11 } },
+                yAxis: [
+                    { type: 'value', name: 'CTR (%)', axisLabel: { formatter: '{value}%', fontSize: 10 } },
+                    { type: 'value', name: 'CPC ($)', axisLabel: { formatter: '${value}', fontSize: 10 }, splitLine: { show: false } }
+                ],
+                series: [
+                    {
+                        name: '平均 CTR (%)', type: 'bar',
+                        data: formatStats.map(s => s.ctr.toFixed(2)),
+                        itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] }
+                    },
+                    {
+                        name: '平均 CPC ($)', type: 'bar', yAxisIndex: 1,
+                        data: formatStats.map(s => s.cpc.toFixed(2)),
+                        itemStyle: { color: '#3b82f6', borderRadius: [4, 4, 0, 0] }
+                    }
+                ]
+            };
+
+            state.charts.format.setOption(option, true);
+        }
+
+        /**
+         * Chart 3: Ad Group Treemap Allocation Chart
+         */
+        function renderAdGroupChart() {
+            const data = state.filteredData;
+            const adGroups = [...new Set(data.map(d => d.adGroupName))];
+
+            const treeData = adGroups.map(ag => {
+                const sub = data.filter(d => d.adGroupName === ag);
+                const spend = sub.reduce((acc, r) => acc + r.cost, 0);
+                const clicks = sub.reduce((acc, r) => acc + r.clicks, 0);
+                return {
+                    name: ag,
+                    value: Math.round(spend),
+                    clicks: clicks
+                };
+            }).filter(d => d.value > 0);
+
+            const option = {
+                tooltip: {
+                    formatter: function(info) {
+                        return `<div class="font-bold text-slate-800">${info.name}</div>
+                                <div class="text-xs">廣告花費: $${info.value.toLocaleString()}</div>
+                                <div class="text-xs">總點擊數: ${info.data.clicks.toLocaleString()} 次</div>`;
+                    }
+                },
+                series: [{
+                    type: 'treemap',
+                    data: treeData,
+                    breadcrumb: { show: false },
+                    label: {
+                        show: true,
+                        formatter: '{b}\n${c}'
+                    },
+                    itemStyle: {
+                        borderColor: '#fff',
+                        borderWidth: 2,
+                        gapWidth: 2
+                    },
+                    levels: [{
+                        color: ['#06C755', '#3b82f6', '#6366f1', '#f59e0b', '#ec4899', '#8b5cf6']
+                    }]
+                }]
+            };
+
+            state.charts.adGroup.setOption(option, true);
+        }
+
+        /**
+         * Chart 4: Creative Scatter Quadrant Analysis (CTR vs CPC)
+         */
+        function renderQuadrantChart() {
+            const data = state.filteredData;
+            if (!data.length) return;
+
+            const totalImpressions = data.reduce((acc, r) => acc + r.impressions, 0);
+            const totalClicks = data.reduce((acc, r) => acc + r.clicks, 0);
+            const totalSpend = data.reduce((acc, r) => acc + r.cost, 0);
+
+            const avgCTR = totalImpressions > 0 ? (totalClicks / totalImpressions) * 100 : 1.5;
+            const avgCPC = totalClicks > 0 ? totalSpend / totalClicks : 5.0;
+
+            const seriesData = data.map(item => [
+                Number((item.ctr * 100).toFixed(2)),
+                Number(item.cpc.toFixed(2)),
+                Math.round(item.cost),
+                item.adName,
+                item.title,
+                item.adFormat
+            ]);
+
+            const option = {
+                tooltip: {
+                    formatter: function(param) {
+                        const val = param.value;
+                        return `<div class="font-bold text-slate-800 mb-1">${val[3]}</div>
+                                <div class="text-xs text-slate-600 mb-1">${val[4]}</div>
+                                <div class="text-xs">點閱率 (CTR): <span class="font-bold text-emerald-600">${val[0]}%</span></div>
+                                <div class="text-xs">點擊成本 (CPC): <span class="font-bold text-amber-600">$${val[1]}</span></div>
+                                <div class="text-xs">花費 (Cost): <span class="font-bold">$${val[2].toLocaleString()}</span></div>
+                                <div class="text-xs">格式: ${val[5]}</div>`;
+                    }
+                },
+                grid: { left: '8%', right: '5%', bottom: '12%', top: '10%' },
+                xAxis: {
+                    name: 'CTR (%)',
+                    splitLine: { lineStyle: { type: 'dashed' } },
+                    axisLabel: { formatter: '{value}%' }
+                },
+                yAxis: {
+                    name: 'CPC ($)',
+                    splitLine: { lineStyle: { type: 'dashed' } },
+                    axisLabel: { formatter: '${value}' }
+                },
+                series: [{
+                    type: 'scatter',
+                    symbolSize: function(data) {
+                        return Math.max(12, Math.min(45, Math.sqrt(data[2]) * 0.25));
+                    },
+                    data: seriesData,
+                    itemStyle: {
+                        color: function(param) {
+                            const ctr = param.value[0];
+                            const cpc = param.value[1];
+                            if (ctr >= avgCTR && cpc <= avgCPC) return '#06C755'; // High CTR, Low CPC - Star
+                            if (ctr >= avgCTR && cpc > avgCPC) return '#3b82f6';  // High CTR, High CPC
+                            if (ctr < avgCTR && cpc <= avgCPC) return '#f59e0b';  // Low CTR, Low CPC
+                            return '#f43f5e'; // Low CTR, High CPC - Needs optimization
+                        },
+                        opacity: 0.85
+                    },
+                    markLine: {
+                        lineStyle: { type: 'solid', color: '#94a3b8', width: 1.5 },
+                        data: [
+                            { xAxis: avgCTR, label: { formatter: `平均 CTR: ${avgCTR.toFixed(2)}%`, position: 'end' } },
+                            { yAxis: avgCPC, label: { formatter: `平均 CPC: $${avgCPC.toFixed(2)}`, position: 'end' } }
+                        ]
+                    }
+                }]
+            };
+
+            state.charts.quadrant.setOption(option, true);
+        }
+
+        /**
+         * Chart 5: Top / Bottom Ranking Bar Chart
+         */
+        function renderRankingChart() {
+            let data = [...state.filteredData];
+            const isCTR = state.rankMetric === 'ctr';
+            const isTop = state.rankType === 'top';
+
+            data.sort((a, b) => {
+                const valA = isCTR ? a.ctr : a.clicks;
+                const valB = isCTR ? b.ctr : b.clicks;
+                return isTop ? valB - valA : valA - valB;
+            });
+
+            const top10 = data.slice(0, 10).reverse(); // Reverse for horizontal bar orientation
+
+            const option = {
+                tooltip: {
+                    trigger: 'axis',
+                    axisPointer: { type: 'shadow' },
+                    formatter: function(params) {
+                        const item = params[0];
+                        const val = isCTR ? `${item.value.toFixed(2)}%` : item.value.toLocaleString();
+                        return `<div class="font-bold text-slate-800">${item.name}</div>
+                                <div class="text-xs">${isCTR ? '點閱率 CTR' : '點擊數 Clicks'}: <span class="font-bold text-line-600">${val}</span></div>`;
+                    }
+                },
+                grid: { left: '3%', right: '8%', bottom: '5%', top: '5%', containLabel: true },
+                xAxis: {
+                    type: 'value',
+                    axisLabel: { formatter: isCTR ? '{value}%' : '{value}' }
+                },
+                yAxis: {
+                    type: 'category',
+                    data: top10.map(d => d.adName.length > 15 ? d.adName.substring(0, 15) + '...' : d.adName),
+                    axisLabel: { fontSize: 10 }
+                },
+                series: [{
+                    type: 'bar',
+                    data: top10.map(d => isCTR ? Number((d.ctr * 100).toFixed(2)) : d.clicks),
+                    itemStyle: {
+                        color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                            { offset: 0, color: isTop ? '#10b981' : '#f43f5e' },
+                            { offset: 1, color: isTop ? '#06C755' : '#fb7185' }
+                        ]),
+                        borderRadius: [0, 4, 4, 0]
+                    },
+                    label: {
+                        show: true,
+                        position: 'right',
+                        formatter: isCTR ? '{c}%' : '{c}',
+                        fontSize: 10
+                    }
+                }]
+            };
+
+            state.charts.ranking.setOption(option, true);
+        }
+
+        function setRankType(type) {
+            state.rankType = type;
+            document.getElementById('rank-type-top').className = type === 'top' ? 
+                'px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm transition' : 
+                'px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-800 transition';
+            document.getElementById('rank-type-bottom').className = type === 'bottom' ? 
+                'px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm transition' : 
+                'px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-800 transition';
+            renderRankingChart();
+        }
+
+        function setRankMetric(metric) {
+            state.rankMetric = metric;
+            document.getElementById('rank-metric-ctr').className = metric === 'ctr' ? 
+                'px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm transition' : 
+                'px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-800 transition';
+            document.getElementById('rank-metric-clicks').className = metric === 'clicks' ? 
+                'px-2.5 py-1 text-xs font-semibold rounded-md bg-white text-slate-800 shadow-sm transition' : 
+                'px-2.5 py-1 text-xs font-semibold rounded-md text-slate-600 hover:text-slate-800 transition';
+            renderRankingChart();
+        }
+
+        /**
+         * Render Title Copy Performance Analytics Cards
+         */
+        function renderHeadlineInsights() {
+            const container = document.getElementById('headline-insights-container');
+            const data = state.filteredData;
+
+            if (!data.length) {
+                container.innerHTML = `<div class="col-span-full text-center py-6 text-xs text-slate-400">無符合條件數據</div>`;
+                return;
+            }
+
+            // Group by title
+            const headlineMap = {};
+            data.forEach(item => {
+                if (!headlineMap[item.title]) {
+                    headlineMap[item.title] = { title: item.title, count: 0, cost: 0, clicks: 0, imps: 0 };
+                }
+                headlineMap[item.title].count += 1;
+                headlineMap[item.title].cost += item.cost;
+                headlineMap[item.title].clicks += item.clicks;
+                headlineMap[item.title].imps += item.impressions;
+            });
+
+            const headlineList = Object.values(headlineMap).map(h => {
+                const ctr = h.imps > 0 ? (h.clicks / h.imps) * 100 : 0;
+                const cpc = h.clicks > 0 ? h.cost / h.clicks : 0;
+                return { ...h, ctr, cpc };
+            });
+
+            // Sort by Avg CTR descending
+            headlineList.sort((a, b) => b.ctr - a.ctr);
+            const top3 = headlineList.slice(0, 3);
+
+            container.innerHTML = top3.map((h, idx) => `
+                <div class="bg-slate-50 rounded-xl p-4 border border-slate-200/70 hover:border-line-500/50 transition">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-[10px] font-bold px-2 py-0.5 rounded-full ${idx === 0 ? 'bg-amber-100 text-amber-700 border border-amber-200' : 'bg-slate-200 text-slate-600'}">
+                            Top ${idx + 1} 表現最佳文案
+                        </span>
+                        <span class="text-[11px] text-slate-400">衍生 ${h.count} 個素材</span>
+                    </div>
+                    <p class="text-xs font-bold text-slate-800 mb-3 line-clamp-2" title="${h.title}">"${h.title}"</p>
+                    <div class="grid grid-cols-3 gap-2 text-center bg-white p-2 rounded-lg border border-slate-200/50">
+                        <div>
+                            <div class="text-[10px] text-slate-400">平均 CTR</div>
+                            <div class="text-xs font-extrabold text-emerald-600">${h.ctr.toFixed(2)}%</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-slate-400">平均 CPC</div>
+                            <div class="text-xs font-extrabold text-amber-600">$${h.cpc.toFixed(1)}</div>
+                        </div>
+                        <div>
+                            <div class="text-[10px] text-slate-400">總花費</div>
+                            <div class="text-xs font-bold text-slate-700">$${Math.round(h.cost).toLocaleString()}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        /**
+         * Render Creative Preview Cards Grid
+         */
+        function renderCreativeCards() {
+            const container = document.getElementById('creative-cards-container');
+            const data = state.filteredData;
+            
+            document.getElementById('creative-card-count').innerText = Math.min(6, data.length);
+
+            if (!data.length) {
+                container.innerHTML = `<div class="col-span-full text-center py-6 text-xs text-slate-400">無符合條件數據</div>`;
+                return;
+            }
+
+            const cards = data.slice(0, 6); // Display top 6 matching creatives
+            container.innerHTML = cards.map(item => `
+                <div class="bg-slate-50/50 rounded-xl p-4 border border-slate-200/80 hover:shadow-md hover:border-line-500/40 transition flex flex-col justify-between space-y-3">
+                    <div>
+                        <div class="flex items-center justify-between mb-2">
+                            <span class="text-[10px] font-semibold px-2 py-0.5 rounded-full ${item.configuredStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                                ${item.configuredStatus}
+                            </span>
+                            <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-50 text-indigo-600 border border-indigo-100">
+                                ${item.adFormat}
+                            </span>
+                        </div>
+                        <h4 class="text-xs font-bold text-slate-800 line-clamp-1" title="${item.adName}">${item.adName}</h4>
+                        <p class="text-xs font-semibold text-slate-700 mt-1 line-clamp-1">標題：${item.title}</p>
+                        <p class="text-[11px] text-slate-500 mt-0.5 line-clamp-2">${item.description}</p>
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-200/60 grid grid-cols-4 gap-1 text-center">
+                        <div class="bg-white p-1.5 rounded border border-slate-100">
+                            <div class="text-[9px] text-slate-400">花費</div>
+                            <div class="text-xs font-bold text-slate-800">$${Math.round(item.cost)}</div>
+                        </div>
+                        <div class="bg-white p-1.5 rounded border border-slate-100">
+                            <div class="text-[9px] text-slate-400">點擊</div>
+                            <div class="text-xs font-bold text-slate-800">${item.clicks}</div>
+                        </div>
+                        <div class="bg-white p-1.5 rounded border border-slate-100">
+                            <div class="text-[9px] text-slate-400">CTR</div>
+                            <div class="text-xs font-bold text-emerald-600">${(item.ctr * 100).toFixed(2)}%</div>
+                        </div>
+                        <div class="bg-white p-1.5 rounded border border-slate-100">
+                            <div class="text-[9px] text-slate-400">CPC</div>
+                            <div class="text-xs font-bold text-amber-600">$${item.cpc.toFixed(1)}</div>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        /**
+         * Render Detailed Data Table
+         */
+        function renderTable() {
+            const tbody = document.getElementById('table-body');
+            let data = [...state.filteredData];
+
+            // Sorting logic
+            data.sort((a, b) => {
+                let valA = a[state.sortColumn];
+                let valB = b[state.sortColumn];
+
+                if (typeof valA === 'string') {
+                    return state.sortDirection === 'asc' ? 
+                        valA.localeCompare(valB) : valB.localeCompare(valA);
+                }
+                return state.sortDirection === 'asc' ? valA - valB : valB - valA;
+            });
+
+            // Pagination calculation
+            const totalRecords = data.length;
+            const totalPages = Math.ceil(totalRecords / state.pageSize) || 1;
+            if (state.currentPage > totalPages) state.currentPage = totalPages;
+
+            const startIndex = (state.currentPage - 1) * state.pageSize;
+            const pageData = data.slice(startIndex, startIndex + state.pageSize);
+
+            if (!pageData.length) {
+                tbody.innerHTML = `<tr><td colspan="10" class="text-center py-8 text-slate-400">未發現符合條件的數據紀錄</td></tr>`;
+            } else {
+                tbody.innerHTML = pageData.map(row => `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="p-3 font-medium text-slate-800 max-w-[150px] truncate" title="${row.campaignName}">${row.campaignName}</td>
+                        <td class="p-3 text-slate-600 max-w-[140px] truncate" title="${row.adGroupName}">${row.adGroupName}</td>
+                        <td class="p-3 font-semibold text-slate-800 max-w-[180px] truncate" title="${row.title}">${row.title}</td>
+                        <td class="p-3">
+                            <span class="text-[10px] px-2 py-0.5 rounded font-bold ${row.adFormat === 'IMAGE' ? 'bg-blue-100 text-blue-700' : row.adFormat === 'VIDEO' ? 'bg-purple-100 text-purple-700' : 'bg-amber-100 text-amber-700'}">
+                                ${row.adFormat}
+                            </span>
+                        </td>
+                        <td class="p-3">
+                            <span class="text-[10px] px-2 py-0.5 rounded font-semibold ${row.configuredStatus === 'ACTIVE' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-600'}">
+                                ${row.configuredStatus}
+                            </span>
+                        </td>
+                        <td class="p-3 text-right font-bold text-slate-900">$${Math.round(row.cost).toLocaleString()}</td>
+                        <td class="p-3 text-right text-slate-600">${row.impressions.toLocaleString()}</td>
+                        <td class="p-3 text-right text-slate-600">${row.clicks.toLocaleString()}</td>
+                        <td class="p-3 text-right font-bold text-emerald-600">${(row.ctr * 100).toFixed(2)}%</td>
+                        <td class="p-3 text-right font-bold text-amber-600">$${row.cpc.toFixed(2)}</td>
+                    </tr>
+                `).join('');
+            }
+
+            renderPaginationControls(totalRecords, totalPages);
+        }
+
+        function sortTable(column) {
+            if (state.sortColumn === column) {
+                state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+            } else {
+                state.sortColumn = column;
+                state.sortDirection = 'desc';
+            }
+            renderTable();
+        }
+
+        function changePageSize() {
+            state.pageSize = parseInt(document.getElementById('table-page-size').value, 10);
+            state.currentPage = 1;
+            renderTable();
+        }
+
+        function renderPaginationControls(totalRecords, totalPages) {
+            const start = totalRecords === 0 ? 0 : (state.currentPage - 1) * state.pageSize + 1;
+            const end = Math.min(state.currentPage * state.pageSize, totalRecords);
+            
+            document.getElementById('table-pagination-info').innerText = `顯示 ${start} - ${end} 筆，共 ${totalRecords} 筆紀錄`;
+
+            const btnContainer = document.getElementById('table-pagination-buttons');
+            let btns = '';
+
+            btns += `<button onclick="goToPage(1)" ${state.currentPage === 1 ? 'disabled' : ''} class="px-2 py-1 text-xs rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-100"><i class="fa-solid fa-angles-left"></i></button>`;
+            btns += `<button onclick="goToPage(${state.currentPage - 1})" ${state.currentPage === 1 ? 'disabled' : ''} class="px-2 py-1 text-xs rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-100"><i class="fa-solid fa-chevron-left"></i></button>`;
+            
+            btns += `<span class="px-3 py-1 text-xs font-semibold text-slate-700 bg-white border border-slate-200 rounded">${state.currentPage} / ${totalPages}</span>`;
+
+            btns += `<button onclick="goToPage(${state.currentPage + 1})" ${state.currentPage >= totalPages ? 'disabled' : ''} class="px-2 py-1 text-xs rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-100"><i class="fa-solid fa-chevron-right"></i></button>`;
+            btns += `<button onclick="goToPage(${totalPages})" ${state.currentPage >= totalPages ? 'disabled' : ''} class="px-2 py-1 text-xs rounded border border-slate-200 disabled:opacity-40 hover:bg-slate-100"><i class="fa-solid fa-angles-right"></i></button>`;
+
+            btnContainer.innerHTML = btns;
+        }
+
+        function goToPage(page) {
+            state.currentPage = page;
+            renderTable();
+        }
+
+        /**
+         * Export Filtered Data to Excel (.xlsx)
+         */
+        function exportExcel() {
+            if (!state.filteredData.length) {
+                showToast('無資料可供匯出', 'error');
+                return;
+            }
+
+            const exportRows = state.filteredData.map(item => ({
+                '設定狀態': item.configuredStatus,
+                '投放狀態': item.status,
+                '廣告名稱': item.adName,
+                '廣告 ID': item.adId,
+                '廣告群組名稱': item.adGroupName,
+                '廣告群組 ID': item.adGroupId,
+                '行銷活動名稱': item.campaignName,
+                '行銷活動 ID': item.campaignId,
+                '廣告格式': item.adFormat,
+                '廣告標題': item.title,
+                '廣告文案': item.description,
+                '估計觸及數': item.reach,
+                '曝光數': item.impressions,
+                '點擊數': item.clicks,
+                '點閱率 (CTR)': `${(item.ctr * 100).toFixed(2)}%`,
+                '點擊成本 (CPC)': item.cpc.toFixed(2),
+                '總花費 (TWD)': item.cost
+            }));
+
+            const worksheet = XLSX.utils.json_to_sheet(exportRows);
+            const workbook = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Digital_Ad_Report_Filtered");
+            
+            const timeStr = new Date().toISOString().slice(0,10);
+            XLSX.writeFile(workbook, `Digital_Ad_Report_Filtered_${timeStr}.xlsx`);
+            showToast('已成功匯出 Excel 報表！', 'success');
+        }
+
+        /**
+         * Export Filtered Data to CSV
+         */
+        function exportCSV() {
+            if (!state.filteredData.length) {
+                showToast('無資料可供匯出', 'error');
+                return;
+            }
+
+            const headers = ['設定狀態','投放狀態','廣告名稱','廣告 ID','廣告群組名稱','廣告群組 ID','行銷活動名稱','行銷活動 ID','廣告格式','廣告標題','廣告文案','估計觸及數','曝光數','點擊數','點閱率','點擊成本','總花費'];
+            
+            let csvContent = "\uFEFF" + headers.join(",") + "\n";
+            state.filteredData.forEach(item => {
+                const row = [
+                    `"${item.configuredStatus}"`,
+                    `"${item.status}"`,
+                    `"${item.adName.replace(/"/g, '""')}"`,
+                    `"${item.adId}"`,
+                    `"${item.adGroupName.replace(/"/g, '""')}"`,
+                    `"${item.adGroupId}"`,
+                    `"${item.campaignName.replace(/"/g, '""')}"`,
+                    `"${item.campaignId}"`,
+                    `"${item.adFormat}"`,
+                    `"${item.title.replace(/"/g, '""')}"`,
+                    `"${item.description.replace(/"/g, '""')}"`,
+                    item.reach,
+                    item.impressions,
+                    item.clicks,
+                    `"${(item.ctr * 100).toFixed(2)}%"`,
+                    item.cpc.toFixed(2),
+                    item.cost
+                ];
+                csvContent += row.join(",") + "\n";
+            });
+
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement("a");
+            const timeStr = new Date().toISOString().slice(0,10);
+            
+            link.setAttribute("href", url);
+            link.setAttribute("download", `Digital_Ad_Report_Filtered_${timeStr}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showToast('已成功導出 CSV 數據！', 'success');
+        }
+    </script>
+</body>
+</html>
