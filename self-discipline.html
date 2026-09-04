@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>游的自律表</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0fdf4',
+                            500: '#22c55e',
+                            600: '#16a34a',
+                            700: '#15803d',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- PapaParse for CSV parsing -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a;
+            color: #f8fafc;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+
+<body class="min-h-screen pb-12 text-slate-100 bg-slate-950 custom-scrollbar selection:bg-indigo-500 selection:text-white">
+
+    <!-- TOP NAVIGATION BAR -->
+    <header class="sticky top-0 z-50 glass-panel border-b border-slate-800 shadow-2xl bg-slate-900/95 py-3.5 px-4 sm:px-8 mb-6">
+        <div class="max-w-7xl mx-auto space-y-3.5">
+            
+            <!-- Top Banner Row: Branding + Dynamic Rank Badge + Sync Action -->
+            <div class="flex items-center justify-between gap-4">
+                <!-- App Branding & Rank Badge -->
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-indigo-600 via-purple-600 to-pink-500 flex items-center justify-center shadow-lg shadow-indigo-500/20 ring-2 ring-indigo-400/30 shrink-0">
+                        <i data-lucide="shield-check" class="w-6 h-6 text-white"></i>
+                    </div>
+                    <div class="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-3">
+                        <div class="flex items-center gap-2.5">
+                            <h1 class="text-xl font-extrabold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-slate-200 to-indigo-300">
+                                游的自律表
+                            </h1>
+                            <!-- Dynamic Current Rank Badge Beside Main Title -->
+                            <div id="headerRankBadge" class="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold bg-slate-800 text-slate-300 border border-slate-700 shadow-sm transition-all duration-300">
+                                <span id="headerRankIcon">🌱</span>
+                                <span id="headerRankText">見習自律者 (0天)</span>
+                            </div>
+                        </div>
+                        <p class="text-[11px] text-slate-400 font-medium hidden md:block">每日 7 大核心打卡 & 角色每週戰略</p>
+                    </div>
+                </div>
+
+                <!-- Sync Button -->
+                <div class="flex items-center gap-2">
+                    <button onclick="syncSheetData()" title="與 Google 試算表同步" 
+                        class="py-2 px-3 sm:px-3.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-semibold text-slate-200 transition flex items-center gap-2 shadow-md">
+                        <i data-lucide="refresh-cw" id="syncSpinner" class="w-4 h-4 text-emerald-400"></i>
+                        <span class="hidden sm:inline">試算表同步</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Navigation Tabs (1-5 Tabs placed below main header) -->
+            <div class="pt-2 border-t border-slate-800/80 flex items-center justify-center sm:justify-start">
+                <nav class="flex items-center gap-2 overflow-x-auto max-w-full custom-scrollbar py-1 w-full sm:w-auto">
+                    <button onclick="switchTab('checkin')" id="tab-btn-checkin" 
+                        class="tab-btn py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 whitespace-nowrap bg-indigo-600 text-white shadow-lg shadow-indigo-500/30">
+                        <i data-lucide="check-square" class="w-4 h-4"></i>
+                        <span>1. 今日打卡</span>
+                    </button>
+
+                    <button onclick="switchTab('weekly')" id="tab-btn-weekly" 
+                        class="tab-btn py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 whitespace-nowrap bg-slate-800/80 text-slate-300 hover:bg-slate-700/80">
+                        <i data-lucide="users" class="w-4 h-4"></i>
+                        <span>2. 每週必辦</span>
+                    </button>
+
+                    <button onclick="switchTab('analytics')" id="tab-btn-analytics" 
+                        class="tab-btn py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 whitespace-nowrap bg-slate-800/80 text-slate-300 hover:bg-slate-700/80">
+                        <i data-lucide="bar-chart-3" class="w-4 h-4"></i>
+                        <span>3. 數據分析</span>
+                    </button>
+
+                    <button onclick="switchTab('records')" id="tab-btn-records" 
+                        class="tab-btn py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 whitespace-nowrap bg-slate-800/80 text-slate-300 hover:bg-slate-700/80">
+                        <i data-lucide="table" class="w-4 h-4"></i>
+                        <span>4. 打卡明細</span>
+                    </button>
+
+                    <button onclick="switchTab('rules')" id="tab-btn-rules" 
+                        class="tab-btn py-2 px-3.5 rounded-xl text-xs sm:text-sm font-bold transition flex items-center gap-2 whitespace-nowrap bg-slate-800/80 text-slate-300 hover:bg-slate-700/80">
+                        <i data-lucide="trophy" class="w-4 h-4"></i>
+                        <span>5. 升級規則</span>
+                    </button>
+                </nav>
+            </div>
+
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-8 space-y-6">
+
+        <!-- ================================================================= -->
+        <!-- VIEW 1: TODAY CHECKIN (1. 今日打卡) -->
+        <!-- ================================================================= -->
+        <section id="view-checkin" class="tab-content space-y-6">
+            
+            <!-- Date Picker & Progress Card Header -->
+            <div class="glass-panel p-5 rounded-3xl border border-slate-800 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
+                <!-- Left: Date Selection Group -->
+                <div class="flex items-center gap-3 w-full md:w-auto shrink-0">
+                    <div class="p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-2xl text-indigo-400 shrink-0">
+                        <i data-lucide="calendar" class="w-5 h-5"></i>
+                    </div>
+                    <div class="flex flex-col justify-center">
+                        <label class="block text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">打卡日期</label>
+                        <input type="date" id="checkinDatePicker" onchange="onDateChange()" 
+                            class="bg-slate-900 border border-slate-700 text-white text-xs font-semibold rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none shadow-inner cursor-pointer">
+                    </div>
+                    <button onclick="resetTodayCheckin()" class="self-end mb-0.5 text-xs font-semibold bg-slate-800 hover:bg-slate-700 text-slate-300 px-3 py-2 rounded-xl border border-slate-700 transition shrink-0 whitespace-nowrap">
+                        回到今天
+                    </button>
+                </div>
+
+                <!-- Right: Progress Bar & Qualification Status -->
+                <div class="w-full md:w-1/2 space-y-2 border-t md:border-t-0 pt-3 md:pt-0 border-slate-800">
+                    <div class="flex justify-between items-center text-xs font-bold gap-2">
+                        <span id="checkinProgressText" class="text-slate-200">今日達成率: 0 / 7 項 (0%)</span>
+                        <span id="checkinQualificationBadge" class="text-rose-400 bg-rose-950/60 border border-rose-500/30 px-2.5 py-0.5 rounded-full shrink-0">未達 80% (將中斷連續)</span>
+                    </div>
+                    <div class="w-full h-3 bg-slate-900 rounded-full overflow-hidden border border-slate-800 p-0.5">
+                        <div id="checkinProgressBar" class="h-full bg-gradient-to-r from-indigo-500 via-purple-500 to-emerald-400 rounded-full transition-all duration-500" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Core Habits Grid -->
+            <div id="coreHabitsGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Dynamically Rendered by JS -->
+            </div>
+
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- VIEW 2: WEEKLY ROLE TASKS (2. 每週必辦) -->
+        <!-- ================================================================= -->
+        <section id="view-weekly" class="tab-content hidden space-y-6">
+            
+            <div class="flex items-center justify-between">
+                <div>
+                    <h2 class="text-xl font-bold text-white flex items-center gap-2">
+                        <i data-lucide="target" class="w-5 h-5 text-indigo-400"></i>
+                        角色每週必辦戰略
+                    </h2>
+                    <p class="text-xs text-slate-400">分工突破：好男人 🏠、好牛馬 💼、好斜槓 🚀、好學習 🎓</p>
+                </div>
+                <button onclick="openAddTaskModal()" class="py-2 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold flex items-center gap-2 transition shadow-lg shadow-indigo-600/30">
+                    <i data-lucide="plus-circle" class="w-4 h-4"></i>
+                    新增每週任務
+                </button>
+            </div>
+
+            <!-- Role Cards Grid (4 columns) -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
+                
+                <!-- 好男人 -->
+                <div class="glass-panel p-4 rounded-3xl border border-slate-800 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">🏠</span>
+                            <div>
+                                <h3 class="font-bold text-sm text-white">好男人</h3>
+                                <p class="text-[10px] text-slate-400">家庭與生活責任</p>
+                            </div>
+                        </div>
+                        <span id="roleBadge-好男人" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">0/0</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5">
+                        <div id="roleProgress-好男人" class="bg-emerald-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="roleList-好男人" class="space-y-2 min-h-[160px]"></div>
+                </div>
+
+                <!-- 好牛馬 -->
+                <div class="glass-panel p-4 rounded-3xl border border-slate-800 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">💼</span>
+                            <div>
+                                <h3 class="font-bold text-sm text-white">好牛馬</h3>
+                                <p class="text-[10px] text-slate-400">本業工作與客戶</p>
+                            </div>
+                        </div>
+                        <span id="roleBadge-好牛馬" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20">0/0</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5">
+                        <div id="roleProgress-好牛馬" class="bg-amber-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="roleList-好牛馬" class="space-y-2 min-h-[160px]"></div>
+                </div>
+
+                <!-- 好斜槓 -->
+                <div class="glass-panel p-4 rounded-3xl border border-slate-800 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">🚀</span>
+                            <div>
+                                <h3 class="font-bold text-sm text-white">好斜槓</h3>
+                                <p class="text-[10px] text-slate-400">副業與個人專案</p>
+                            </div>
+                        </div>
+                        <span id="roleBadge-好斜槓" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">0/0</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5">
+                        <div id="roleProgress-好斜槓" class="bg-indigo-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="roleList-好斜槓" class="space-y-2 min-h-[160px]"></div>
+                </div>
+
+                <!-- 好學習 -->
+                <div class="glass-panel p-4 rounded-3xl border border-slate-800 space-y-4">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800">
+                        <div class="flex items-center gap-2">
+                            <span class="text-2xl">🎓</span>
+                            <div>
+                                <h3 class="font-bold text-sm text-white">好學習</h3>
+                                <p class="text-[10px] text-slate-400">自我提升與技能</p>
+                            </div>
+                        </div>
+                        <span id="roleBadge-好學習" class="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-cyan-500/10 text-cyan-400 border border-cyan-500/20">0/0</span>
+                    </div>
+                    <div class="w-full bg-slate-900 rounded-full h-1.5">
+                        <div id="roleProgress-好學習" class="bg-cyan-500 h-1.5 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="roleList-好學習" class="space-y-2 min-h-[160px]"></div>
+                </div>
+
+            </div>
+
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- VIEW 3: DATA ANALYTICS (3. 數據分析) -->
+        <!-- ================================================================= -->
+        <section id="view-analytics" class="tab-content hidden space-y-6">
+            
+            <!-- Rules Banner Explanation -->
+            <div class="p-4 rounded-2xl bg-indigo-950/40 border border-indigo-500/30 flex items-start gap-3">
+                <i data-lucide="alert-circle" class="w-5 h-5 text-indigo-400 shrink-0 mt-0.5"></i>
+                <div class="text-xs space-y-1">
+                    <p class="font-bold text-indigo-200">📊 每日達成率與自律連續天數計算標準：</p>
+                    <p class="text-slate-300">
+                        • 每日打卡 <strong>6 項以上 (6/7 = 85.7%)</strong>：視為當日達成 80% 門檻，<strong>連續自律天數 +1 天</strong>。<br>
+                        • 每日打卡 <strong>5 項以下 (5/7 = 71.4%)</strong>：未達 80% 門檻，<strong>連續自律進度將立即歸零重置 (0 天)</strong>！
+                    </p>
+                </div>
+            </div>
+
+            <!-- KPI Summary Grid -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="glass-panel p-4 rounded-2xl border border-slate-800 space-y-1">
+                    <p class="text-[11px] font-semibold text-slate-400">當前連續達標天數</p>
+                    <p id="kpiCurrentStreak" class="text-2xl font-extrabold text-amber-400">0 天</p>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl border border-slate-800 space-y-1">
+                    <p class="text-[11px] font-semibold text-slate-400">歷史最長連續紀錄</p>
+                    <p id="kpiMaxStreak" class="text-2xl font-extrabold text-indigo-400">0 天</p>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl border border-slate-800 space-y-1">
+                    <p class="text-[11px] font-semibold text-slate-400">總累積合格天數</p>
+                    <p id="kpiTotalQualified" class="text-2xl font-extrabold text-emerald-400">0 天</p>
+                </div>
+                <div class="glass-panel p-4 rounded-2xl border border-slate-800 space-y-1">
+                    <p class="text-[11px] font-semibold text-slate-400">角色任務達成率</p>
+                    <p id="kpiRoleTaskRate" class="text-2xl font-extrabold text-cyan-400">0%</p>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Trend Chart -->
+                <div class="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="trending-up" class="w-4 h-4 text-indigo-400"></i>
+                        每日完成率趨勢圖 (含 80% 達標紅線)
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="trendChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Habits Completion Comparison Chart -->
+                <div class="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+                    <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                        <i data-lucide="pie-chart" class="w-4 h-4 text-emerald-400"></i>
+                        7 大核心習慣總完成數佔比
+                    </h3>
+                    <div class="h-64">
+                        <canvas id="habitsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Heatmap section -->
+            <div class="glass-panel p-5 rounded-3xl border border-slate-800 space-y-3">
+                <h3 class="text-sm font-bold text-white flex items-center gap-2">
+                    <i data-lucide="grid" class="w-4 h-4 text-purple-400"></i>
+                    打卡熱力圖 (綠色 $\ge 80\%$, 紅色 $< 80\%$)
+                </h3>
+                <div id="heatmapGrid" class="grid grid-cols-6 sm:grid-cols-10 md:grid-cols-15 gap-2 pt-2">
+                    <!-- Dynamically populated -->
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- VIEW 4: RECORDS TABLE (4. 打卡明細) -->
+        <!-- ================================================================= -->
+        <section id="view-records" class="tab-content hidden space-y-6">
+            
+            <div class="glass-panel p-5 rounded-3xl border border-slate-800 space-y-4">
+                <div class="flex flex-col sm:flex-row items-center justify-between gap-4">
+                    <h2 class="text-lg font-bold text-white flex items-center gap-2">
+                        <i data-lucide="list" class="w-5 h-5 text-indigo-400"></i>
+                        歷史打卡明細紀錄
+                    </h2>
+                    <input type="text" id="recordSearchInput" oninput="renderRecordsTable()" 
+                        placeholder="搜尋習慣、日期或心得..." 
+                        class="w-full sm:w-64 px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-xs text-white focus:outline-none focus:border-indigo-500">
+                </div>
+
+                <div class="overflow-x-auto custom-scrollbar">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead>
+                            <tr class="border-b border-slate-800 text-slate-400 font-semibold bg-slate-900/50">
+                                <th class="p-3">日期</th>
+                                <th class="p-3">習慣項目</th>
+                                <th class="p-3">打卡狀態</th>
+                                <th class="p-3">心得 / 備註</th>
+                                <th class="p-3 text-right">操作</th>
+                            </tr>
+                        </thead>
+                        <tbody id="recordsTableBody" class="divide-y divide-slate-800/60 text-slate-200">
+                            <!-- Populated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- ================================================================= -->
+        <!-- VIEW 5: DISCIPLINE RULES & REWARDS (5. 升級規則) -->
+        <!-- ================================================================= -->
+        <section id="view-rules" class="tab-content hidden space-y-6">
+            
+            <div class="glass-panel p-6 rounded-3xl border border-slate-800 space-y-3 text-center max-w-3xl mx-auto">
+                <span class="px-3 py-1 bg-amber-500/10 text-amber-400 rounded-full text-xs font-bold border border-amber-500/20">
+                    🏆 自律者榮譽殿堂
+                </span>
+                <h2 class="text-2xl font-black text-white">自律者升級規則與成就獎勵</h2>
+                <div class="p-3 rounded-xl bg-slate-900/80 border border-slate-800 text-xs text-slate-300 text-left space-y-1">
+                    <p class="font-bold text-amber-400">⚠️ 升級原則與重置規範：</p>
+                    <p>1. 每日 7 項核心指標，完成 <strong>6 項 (85.7%)</strong> 方算合格達標。</p>
+                    <p>2. 若當日僅完成 <strong>5 項 (71.4%)</strong> 未滿 80%，<strong>連續自律進度將被重置歸零 (0 天)</strong>！</p>
+                    <p>3. 升級解鎖需靠 <strong>連續不間斷合格天數</strong> 累積突破挑戰。</p>
+                </div>
+            </div>
+
+            <div id="rulesListGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <!-- Dynamically generated rule cards -->
+            </div>
+
+        </section>
+
+    </main>
+
+    <!-- ADD ROLE TASK MODAL -->
+    <div id="addTaskModal" class="fixed inset-0 z-50 bg-slate-950/80 backdrop-blur-sm flex items-center justify-center p-4 hidden">
+        <div class="glass-panel border border-slate-800 rounded-3xl p-6 w-full max-w-md space-y-4 shadow-2xl">
+            <div class="flex items-center justify-between pb-2 border-b border-slate-800">
+                <h3 class="font-bold text-base text-white">新增每週角色任務</h3>
+                <button onclick="closeAddTaskModal()" class="text-slate-400 hover:text-white p-1">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+
+            <div class="space-y-3">
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">選擇角色</label>
+                    <select id="modalRoleSelect" class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-xl p-2.5 focus:outline-none focus:border-indigo-500">
+                        <option value="好男人">🏠 好男人</option>
+                        <option value="好牛馬">💼 好牛馬</option>
+                        <option value="好斜槓">🚀 好斜槓</option>
+                        <option value="好學習">🎓 好學習</option>
+                    </select>
+                </div>
+
+                <div>
+                    <label class="block text-xs font-bold text-slate-400 mb-1">任務內容</label>
+                    <input type="text" id="modalTaskInput" placeholder="例如：打掃家裡、聯繫客戶..." 
+                        class="w-full bg-slate-900 border border-slate-700 text-white text-xs rounded-xl p-2.5 focus:outline-none focus:border-indigo-500">
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2">
+                <button onclick="closeAddTaskModal()" class="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-bold hover:bg-slate-700">取消</button>
+                <button onclick="saveNewRoleTask()" class="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-bold hover:bg-indigo-500">確定新增</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // CONSTANTS & INITIAL STATE
+        // ==========================================
+        const DEFAULT_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vTxd4WqZ3xYqcUyhSWy5T_ovi-Vk1_j5L19GcEoErjWLtq4epcTe3XL2-DITT60SjOVY-RTlaVTy2cJ/pub?gid=2122366177&single=true&output=csv";
+
+        // 7 Core Daily Habits
+        const CORE_HABITS = [
+            { name: '1. 睡眠充足', emoji: '🛌', target: '睡眠7小時' },
+            { name: '2. 金錢花費', emoji: '💰', target: '$800/天' },
+            { name: '3. 閱讀看書', emoji: '📖', target: '0.5小時' },
+            { name: '4. 運動健身', emoji: '🏃', target: '1.5小時' },
+            { name: '5. 英文學習', emoji: '🤑', target: '1小時' },
+            { name: '6. 飲食控制', emoji: '🍔', target: '2000卡/天' },
+            { name: '7. 復盤日記', emoji: '🖊️', target: '每日晚上' }
+        ];
+
+        // Level Up Rules & Rewards
+        const LEVEL_RULES = [
+            { id: 1, rank: '青銅自律者', icon: '🥉', daysRequired: 30,  reward: '一天不用飲控 🍔', bg: 'from-amber-900/30 to-amber-950/50', border: 'border-amber-700/50', text: 'text-amber-400' },
+            { id: 2, rank: '白銀自律者', icon: '🥈', daysRequired: 90,  reward: '旭集/島語吃到飽一次 🍣', bg: 'from-slate-800/40 to-slate-900/60', border: 'border-slate-500/50', text: 'text-slate-300' },
+            { id: 3, rank: '黃金自律者', icon: '🥇', daysRequired: 180, reward: 'GTA VI 🎮', bg: 'from-yellow-950/40 to-amber-900/40', border: 'border-yellow-500/50', text: 'text-yellow-400' },
+            { id: 4, rank: '鑽石自律者', icon: '💎', daysRequired: 270, reward: 'PS6 🕹️', bg: 'from-cyan-950/40 to-blue-900/40', border: 'border-cyan-500/50', text: 'text-cyan-300' },
+            { id: 5, rank: '傳說自律者', icon: '👑', daysRequired: 365, reward: '國外旅遊一次 ✈️', bg: 'from-purple-950/40 to-indigo-900/40', border: 'border-purple-500/50', text: 'text-purple-300' }
+        ];
+
+        let dailyRecords = []; // Stores { id, date, habitName, status, note }
+        let roleTasks = [     // Default role tasks
+            { id: 1, role: '好男人', task: '打掃家裡', status: '未完成' },
+            { id: 2, role: '好男人', task: '送洗棉被', status: '未完成' },
+            { id: 3, role: '好牛馬', task: '追蹤新客戶', status: '未完成' },
+            { id: 4, role: '好牛馬', task: '聯繫舊客戶', status: '未完成' },
+            { id: 5, role: '好斜槓', task: '架好新的網站', status: '未完成' },
+            { id: 6, role: '好學習', task: '看完一本商業書籍', status: '未完成' }
+        ];
+
+        let trendChartInstance = null;
+        let habitsChartInstance = null;
+
+        // ==========================================
+        // DISCIPLINE STREAK & STATS ENGINE
+        // ==========================================
+        function calculateDisciplineStats() {
+            // Group completed count by date
+            const dateMap = {};
+            dailyRecords.forEach(r => {
+                if (!dateMap[r.date]) dateMap[r.date] = 0;
+                if (r.status === '完成') dateMap[r.date]++;
+            });
+
+            const sortedDates = Object.keys(dateMap).sort();
+            
+            let currentStreak = 0;
+            let maxStreak = 0;
+            let totalQualifiedDays = 0;
+
+            sortedDates.forEach(d => {
+                const doneCount = dateMap[d];
+                const completionRate = doneCount / CORE_HABITS.length;
+
+                // Requirement: 6 out of 7 items = 85.7% >= 80%
+                if (completionRate >= 0.8) {
+                    currentStreak++;
+                    totalQualifiedDays++;
+                    if (currentStreak > maxStreak) {
+                        maxStreak = currentStreak;
+                    }
+                } else {
+                    // Reset streak if completed < 6 items (e.g., 5 items = 71.4% < 80%)
+                    currentStreak = 0;
+                }
+            });
+
+            return { currentStreak, maxStreak, totalQualifiedDays, sortedDates, dateMap };
+        }
+
+        // Helper: Date string YYYY-MM-DD
+        function getTodayString() {
+            const today = new Date();
+            const yyyy = today.getFullYear();
+            const mm = String(today.getMonth() + 1).padStart(2, '0');
+            const dd = String(today.getDate()).padStart(2, '0');
+            return `${yyyy}-${mm}-${dd}`;
+        }
+
+        function safeIcons() {
+            if (window.lucide && window.lucide.createIcons) {
+                window.lucide.createIcons();
+            }
+        }
+
+        // ==========================================
+        // TAB SWITCHING & BADGE
+        // ==========================================
+        function switchTab(tabId) {
+            document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-500/30');
+                btn.classList.add('bg-slate-800/80', 'text-slate-300', 'hover:bg-slate-700/80');
+            });
+
+            const activeView = document.getElementById(`view-${tabId}`);
+            if (activeView) activeView.classList.remove('hidden');
+
+            const activeBtn = document.getElementById(`tab-btn-${tabId}`);
+            if (activeBtn) {
+                activeBtn.classList.remove('bg-slate-800/80', 'text-slate-300', 'hover:bg-slate-700/80');
+                activeBtn.classList.add('bg-indigo-600', 'text-white', 'shadow-lg', 'shadow-indigo-500/30');
+            }
+
+            if (tabId === 'analytics') {
+                renderAnalyticsView();
+            } else if (tabId === 'records') {
+                renderRecordsTable();
+            } else if (tabId === 'rules') {
+                renderRulesView();
+            }
+
+            safeIcons();
+        }
+
+        function updateHeaderRankBadge() {
+            const stats = calculateDisciplineStats();
+            let currentRank = { rank: '見習自律者', icon: '🌱', border: 'border-slate-700', text: 'text-slate-300' };
+
+            LEVEL_RULES.forEach(rule => {
+                if (stats.currentStreak >= rule.daysRequired) {
+                    currentRank = rule;
+                }
+            });
+
+            const badgeEl = document.getElementById('headerRankBadge');
+            const iconEl = document.getElementById('headerRankIcon');
+            const textEl = document.getElementById('headerRankText');
+
+            if (badgeEl && iconEl && textEl) {
+                iconEl.innerText = currentRank.icon;
+                textEl.innerText = `${currentRank.rank} (連續 ${stats.currentStreak} 天)`;
+                badgeEl.className = `inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-extrabold border shadow-sm transition-all duration-300 ${currentRank.border} ${currentRank.text} bg-slate-900/90`;
+            }
+        }
+
+        // ==========================================
+        // VIEW 1: TODAY CHECKIN LOGIC
+        // ==========================================
+        function getSelectedDate() {
+            const picker = document.getElementById('checkinDatePicker');
+            return picker && picker.value ? picker.value : getTodayString();
+        }
+
+        function onDateChange() {
+            renderTodayCheckinGrid();
+        }
+
+        function resetTodayCheckin() {
+            const picker = document.getElementById('checkinDatePicker');
+            if (picker) picker.value = getTodayString();
+            renderTodayCheckinGrid();
+        }
+
+        function renderTodayCheckinGrid() {
+            const grid = document.getElementById('coreHabitsGrid');
+            if (!grid) return;
+
+            const selectedDate = getSelectedDate();
+            grid.innerHTML = '';
+
+            let totalDone = 0;
+
+            CORE_HABITS.forEach((habit) => {
+                const record = dailyRecords.find(r => r.date === selectedDate && r.habitName === habit.name);
+                const currentStatus = record ? record.status : '未完成';
+                const currentNote = record ? (record.note || '') : '';
+                const isCompleted = currentStatus === '完成';
+
+                if (isCompleted) totalDone++;
+
+                grid.innerHTML += `
+                    <div class="glass-panel p-4 rounded-3xl border ${isCompleted ? 'border-emerald-500/50 bg-emerald-950/10' : 'border-slate-800'} space-y-3 transition-all duration-300 shadow-lg">
+                        <!-- Horizontal 1-Line Layout Header -->
+                        <div class="flex items-center justify-between gap-2">
+                            <div class="flex items-center gap-2.5 min-w-0">
+                                <span class="text-2xl shrink-0">${habit.emoji}</span>
+                                <div class="truncate">
+                                    <h3 class="font-bold text-sm text-white truncate">${habit.name}</h3>
+                                    <span class="text-[10px] font-semibold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-700/50 inline-block">
+                                        🎯 ${habit.target}
+                                    </span>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold shrink-0 ${isCompleted ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400 border border-slate-700'}">
+                                ${isCompleted ? '已完成 ✅' : '未完成'}
+                            </span>
+                        </div>
+
+                        <!-- Checkin Action Buttons (Binary: Complete / Incomplete) -->
+                        <div class="grid grid-cols-2 gap-2 pt-1">
+                            <button onclick="toggleHabitCheckin('${habit.name}', '完成')" 
+                                class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${isCompleted ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400/50' : 'bg-slate-900 text-slate-300 hover:bg-emerald-950/50 hover:text-emerald-400 border border-slate-800'}">
+                                <i data-lucide="check-circle-2" class="w-4 h-4"></i>
+                                <span>✅ 完成</span>
+                            </button>
+
+                            <button onclick="toggleHabitCheckin('${habit.name}', '未完成')" 
+                                class="py-2 px-3 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 ${!isCompleted ? 'bg-rose-950/60 text-rose-300 border border-rose-500/30' : 'bg-slate-900 text-slate-400 hover:bg-slate-800 border border-slate-800'}">
+                                <i data-lucide="x-circle" class="w-4 h-4"></i>
+                                <span>❌ 未完成</span>
+                            </button>
+                        </div>
+
+                        <!-- Note Input Field -->
+                        <div>
+                            <input type="text" value="${currentNote}" 
+                                placeholder="備註/心得 (例如：睡眠7.5小時...)" 
+                                onchange="updateHabitNote('${habit.name}', this.value)"
+                                class="w-full bg-slate-900/90 border border-slate-800 text-xs text-slate-200 rounded-xl px-3 py-1.5 focus:outline-none focus:border-indigo-500">
+                        </div>
+                    </div>
+                `;
+            });
+
+            // Update Progress Header
+            const pct = Math.round((totalDone / CORE_HABITS.length) * 100);
+            const isQualified = (totalDone / CORE_HABITS.length) >= 0.8; // >= 6 items
+
+            const progressText = document.getElementById('checkinProgressText');
+            const badgeEl = document.getElementById('checkinQualificationBadge');
+            const progressBar = document.getElementById('checkinProgressBar');
+
+            if (progressText) progressText.innerText = `今日達成率: ${totalDone} / ${CORE_HABITS.length} 項 (${pct}%)`;
+            if (badgeEl) {
+                if (isQualified) {
+                    badgeEl.className = "text-emerald-400 bg-emerald-950/60 border border-emerald-500/30 px-2.5 py-0.5 rounded-full font-bold";
+                    badgeEl.innerText = "✅ 已達標 (≥80%)";
+                } else {
+                    badgeEl.className = "text-rose-400 bg-rose-950/60 border border-rose-500/30 px-2.5 py-0.5 rounded-full font-bold";
+                    badgeEl.innerText = "❌ 未達 80% (進度將重置)";
+                }
+            }
+            if (progressBar) progressBar.style.width = `${pct}%`;
+
+            safeIcons();
+        }
+
+        function toggleHabitCheckin(habitName, newStatus) {
+            const date = getSelectedDate();
+            const existingIdx = dailyRecords.findIndex(r => r.date === date && r.habitName === habitName);
+
+            if (existingIdx >= 0) {
+                dailyRecords[existingIdx].status = newStatus;
+            } else {
+                dailyRecords.push({
+                    id: Date.now() + Math.random(),
+                    date: date,
+                    habitName: habitName,
+                    status: newStatus,
+                    note: ''
+                });
+            }
+
+            saveDataLocally();
+            renderTodayCheckinGrid();
+            updateHeaderRankBadge();
+        }
+
+        function updateHabitNote(habitName, noteValue) {
+            const date = getSelectedDate();
+            const existingIdx = dailyRecords.findIndex(r => r.date === date && r.habitName === habitName);
+
+            if (existingIdx >= 0) {
+                dailyRecords[existingIdx].note = noteValue;
+            } else {
+                dailyRecords.push({
+                    id: Date.now() + Math.random(),
+                    date: date,
+                    habitName: habitName,
+                    status: '未完成',
+                    note: noteValue
+                });
+            }
+            saveDataLocally();
+        }
+
+        // ==========================================
+        // VIEW 2: WEEKLY ROLE TASKS LOGIC
+        // ==========================================
+        function renderRoleTasksView() {
+            const roles = ['好男人', '好牛馬', '好斜槓', '好學習'];
+
+            roles.forEach(role => {
+                const listEl = document.getElementById(`roleList-${role}`);
+                const badgeEl = document.getElementById(`roleBadge-${role}`);
+                const progressEl = document.getElementById(`roleProgress-${role}`);
+
+                if (!listEl) return;
+
+                const filtered = roleTasks.filter(t => t.role === role);
+                const doneCount = filtered.filter(t => t.status === '完成').length;
+                const totalCount = filtered.length;
+                const pct = totalCount > 0 ? Math.round((doneCount / totalCount) * 100) : 0;
+
+                if (badgeEl) badgeEl.innerText = `${doneCount}/${totalCount}`;
+                if (progressEl) progressEl.style.width = `${pct}%`;
+
+                listEl.innerHTML = '';
+                if (filtered.length === 0) {
+                    listEl.innerHTML = `<p class="text-xs text-slate-500 italic py-4 text-center">尚無任何週任務</p>`;
+                    return;
+                }
+
+                filtered.forEach(task => {
+                    const isDone = task.status === '完成';
+                    listEl.innerHTML += `
+                        <div class="flex items-center justify-between p-2.5 rounded-2xl ${isDone ? 'bg-slate-900/40 opacity-70' : 'bg-slate-900'} border border-slate-800 group">
+                            <label class="flex items-center gap-2.5 text-xs text-slate-200 cursor-pointer min-w-0 flex-1">
+                                <input type="checkbox" ${isDone ? 'checked' : ''} onchange="toggleRoleTaskStatus(${task.id})"
+                                    class="w-4 h-4 rounded border-slate-700 bg-slate-800 text-indigo-600 focus:ring-indigo-500">
+                                <span class="${isDone ? 'line-through text-slate-500' : 'font-medium text-white'} truncate">${task.task}</span>
+                            </label>
+                            <button onclick="deleteRoleTask(${task.id})" class="text-slate-600 hover:text-rose-400 p-1 opacity-0 group-hover:opacity-100 transition">
+                                <i data-lucide="trash-2" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </div>
+                    `;
+                });
+            });
+
+            safeIcons();
+        }
+
+        function toggleRoleTaskStatus(id) {
+            const task = roleTasks.find(t => t.id === id);
+            if (task) {
+                task.status = task.status === '完成' ? '未完成' : '完成';
+                saveDataLocally();
+                renderRoleTasksView();
+            }
+        }
+
+        function deleteRoleTask(id) {
+            roleTasks = roleTasks.filter(t => t.id !== id);
+            saveDataLocally();
+            renderRoleTasksView();
+        }
+
+        function openAddTaskModal() {
+            document.getElementById('addTaskModal').classList.remove('hidden');
+        }
+
+        function closeAddTaskModal() {
+            document.getElementById('addTaskModal').classList.add('hidden');
+        }
+
+        function saveNewRoleTask() {
+            const role = document.getElementById('modalRoleSelect').value;
+            const taskInput = document.getElementById('modalTaskInput');
+            const taskText = taskInput.value.trim();
+
+            if (!taskText) return;
+
+            roleTasks.push({
+                id: Date.now() + Math.random(),
+                role: role,
+                task: taskText,
+                status: '未完成'
+            });
+
+            taskInput.value = '';
+            saveDataLocally();
+            renderRoleTasksView();
+            closeAddTaskModal();
+        }
+
+        // ==========================================
+        // VIEW 3: DATA ANALYTICS LOGIC
+        // ==========================================
+        function renderAnalyticsView() {
+            const stats = calculateDisciplineStats();
+
+            const totalRoleTasks = roleTasks.length;
+            const doneRoleTasks = roleTasks.filter(t => t.status === '完成').length;
+            const roleTaskRate = totalRoleTasks > 0 ? Math.round((doneRoleTasks / totalRoleTasks) * 100) : 0;
+
+            document.getElementById('kpiCurrentStreak').innerText = `${stats.currentStreak} 天`;
+            document.getElementById('kpiMaxStreak').innerText = `${stats.maxStreak} 天`;
+            document.getElementById('kpiTotalQualified').innerText = `${stats.totalQualifiedDays} 天`;
+            document.getElementById('kpiRoleTaskRate').innerText = `${roleTaskRate}%`;
+
+            renderTrendChart(stats.sortedDates);
+            renderHabitsPieChart();
+            renderHeatmapGrid(stats.sortedDates);
+        }
+
+        function renderTrendChart(dates) {
+            const ctx = document.getElementById('trendChart');
+            if (!ctx) return;
+
+            const last7Dates = dates.slice(-7);
+            if (last7Dates.length === 0) last7Dates.push(getTodayString());
+
+            const rates = last7Dates.map(d => {
+                const dayDone = dailyRecords.filter(r => r.date === d && r.status === '完成').length;
+                return Math.round((dayDone / CORE_HABITS.length) * 100);
+            });
+
+            if (trendChartInstance) trendChartInstance.destroy();
+
+            trendChartInstance = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: last7Dates,
+                    datasets: [
+                        {
+                            label: '每日打卡達成率 (%)',
+                            data: rates,
+                            borderColor: '#6366f1',
+                            backgroundColor: 'rgba(99, 102, 241, 0.15)',
+                            borderWidth: 3,
+                            fill: true,
+                            tension: 0.4,
+                            pointBackgroundColor: '#818cf8',
+                            pointRadius: 5
+                        },
+                        {
+                            label: '80% 達標門檻線',
+                            data: Array(last7Dates.length).fill(80),
+                            borderColor: '#ef4444',
+                            borderWidth: 2,
+                            borderDash: [5, 5],
+                            pointRadius: 0,
+                            fill: false
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: { min: 0, max: 100, grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } },
+                        x: { grid: { color: 'rgba(255,255,255,0.05)' }, ticks: { color: '#94a3b8' } }
+                    },
+                    plugins: { legend: { labels: { color: '#cbd5e1' } } }
+                }
+            });
+        }
+
+        function renderHabitsPieChart() {
+            const ctx = document.getElementById('habitsChart');
+            if (!ctx) return;
+
+            const habitCounts = CORE_HABITS.map(h => {
+                return dailyRecords.filter(r => r.habitName === h.name && r.status === '完成').length;
+            });
+
+            if (habitsChartInstance) habitsChartInstance.destroy();
+
+            habitsChartInstance = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: CORE_HABITS.map(h => h.name),
+                    datasets: [{
+                        data: habitCounts,
+                        backgroundColor: [
+                            '#6366f1', '#10b981', '#f59e0b', '#ec4899', '#06b6d4', '#8b5cf6', '#14b8a6'
+                        ],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#cbd5e1', font: { size: 11 } } }
+                    }
+                }
+            });
+        }
+
+        function renderHeatmapGrid(dates) {
+            const grid = document.getElementById('heatmapGrid');
+            if (!grid) return;
+            grid.innerHTML = '';
+
+            const recent = dates.slice(-30);
+            if (recent.length === 0) recent.push(getTodayString());
+
+            recent.forEach(d => {
+                const dayDone = dailyRecords.filter(r => r.date === d && r.status === '完成').length;
+                const pct = Math.round((dayDone / CORE_HABITS.length) * 100);
+
+                let bg = 'bg-rose-900/60 border-rose-500/50';
+                if (pct >= 85) bg = 'bg-emerald-500 border-emerald-400';
+                else if (pct >= 80) bg = 'bg-emerald-600/80 border-emerald-500';
+
+                grid.innerHTML += `
+                    <div class="${bg} rounded-lg p-2 text-center border" title="${d}: ${pct}% (${dayDone}/7項)">
+                        <p class="text-[9px] text-slate-300 font-bold">${d.slice(5)}</p>
+                        <p class="text-[11px] font-extrabold text-white">${pct}%</p>
+                    </div>
+                `;
+            });
+        }
+
+        // ==========================================
+        // VIEW 4: RECORDS TABLE LOGIC
+        // ==========================================
+        function renderRecordsTable() {
+            const tbody = document.getElementById('recordsTableBody');
+            const searchInput = document.getElementById('recordSearchInput');
+            if (!tbody) return;
+
+            const query = searchInput ? searchInput.value.toLowerCase() : '';
+            const filtered = dailyRecords.filter(r => 
+                r.habitName.toLowerCase().includes(query) ||
+                r.date.includes(query) ||
+                (r.note && r.note.toLowerCase().includes(query))
+            ).sort((a, b) => b.date.localeCompare(a.date));
+
+            tbody.innerHTML = '';
+            if (filtered.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="p-4 text-center text-slate-500">尚無相關打卡紀錄</td></tr>`;
+                return;
+            }
+
+            filtered.forEach(r => {
+                const isDone = r.status === '完成';
+                tbody.innerHTML += `
+                    <tr class="hover:bg-slate-900/60 transition">
+                        <td class="p-3 font-semibold text-indigo-300">${r.date}</td>
+                        <td class="p-3 font-bold text-white">${r.habitName}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${isDone ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}">
+                                ${r.status}
+                            </span>
+                        </td>
+                        <td class="p-3 text-slate-300 max-w-xs truncate">${r.note || '-'}</td>
+                        <td class="p-3 text-right">
+                            <button onclick="deleteRecord(${r.id})" class="text-slate-500 hover:text-rose-400 p-1">
+                                <i data-lucide="trash" class="w-3.5 h-3.5"></i>
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            });
+
+            safeIcons();
+        }
+
+        function deleteRecord(id) {
+            dailyRecords = dailyRecords.filter(r => r.id !== id);
+            saveDataLocally();
+            renderRecordsTable();
+        }
+
+        // ==========================================
+        // VIEW 5: LEVEL UP RULES LOGIC
+        // ==========================================
+        function renderRulesView() {
+            const container = document.getElementById('rulesListGrid');
+            if (!container) return;
+
+            const stats = calculateDisciplineStats();
+            container.innerHTML = '';
+
+            LEVEL_RULES.forEach(rule => {
+                const progressPct = Math.min(100, Math.round((stats.currentStreak / rule.daysRequired) * 100));
+                const isUnlocked = stats.currentStreak >= rule.daysRequired;
+
+                container.innerHTML += `
+                    <div class="glass-panel p-5 rounded-3xl border ${rule.border} bg-gradient-to-b ${rule.bg} space-y-4 shadow-xl">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-3">
+                                <span class="text-3xl">${rule.icon}</span>
+                                <div>
+                                    <h3 class="font-extrabold text-base ${rule.text}">${rule.rank}</h3>
+                                    <p class="text-[11px] text-slate-400">門檻: 連續 ${rule.daysRequired} 天不間斷達標 80%</p>
+                                </div>
+                            </div>
+                            <span class="px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase ${isUnlocked ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'bg-slate-800 text-slate-400'}">
+                                ${isUnlocked ? '已解鎖 🎉' : '挑戰進行中'}
+                            </span>
+                        </div>
+
+                        <!-- Reward Card -->
+                        <div class="p-3 rounded-2xl bg-slate-950/70 border border-slate-800/80 space-y-1">
+                            <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                                <i data-lucide="gift" class="w-3.5 h-3.5 text-amber-400"></i> 解鎖成就獎勵
+                            </span>
+                            <p class="text-sm font-extrabold text-white">${rule.reward}</p>
+                        </div>
+
+                        <!-- Progress Bar -->
+                        <div class="space-y-1.5 pt-1">
+                            <div class="flex justify-between items-center text-[11px] font-bold">
+                                <span class="text-slate-400">當前連續挑戰進度</span>
+                                <span class="${rule.text}">${stats.currentStreak} / ${rule.daysRequired} 天 (${progressPct}%)</span>
+                            </div>
+                            <div class="w-full h-2.5 bg-slate-950 rounded-full overflow-hidden border border-slate-800">
+                                <div class="h-full bg-gradient-to-r from-indigo-500 to-emerald-400 rounded-full transition-all duration-500" style="width: ${progressPct}%"></div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            safeIcons();
+        }
+
+        // ==========================================
+        // LOCAL STORAGE & SHEET CSV SYNC
+        // ==========================================
+        function saveDataLocally() {
+            localStorage.setItem('you_self_discipline_records', JSON.stringify(dailyRecords));
+            localStorage.setItem('you_self_discipline_roles', JSON.stringify(roleTasks));
+        }
+
+        function loadDataLocally() {
+            const savedRecords = localStorage.getItem('you_self_discipline_records');
+            const savedRoles = localStorage.getItem('you_self_discipline_roles');
+
+            if (savedRecords) dailyRecords = JSON.parse(savedRecords);
+            if (savedRoles) roleTasks = JSON.parse(savedRoles);
+        }
+
+        function syncSheetData() {
+            const spinner = document.getElementById('syncSpinner');
+            if (spinner) spinner.classList.add('animate-spin');
+
+            Papa.parse(DEFAULT_CSV_URL, {
+                download: true,
+                header: true,
+                skipEmptyLines: true,
+                complete: function(results) {
+                    if (spinner) spinner.classList.remove('animate-spin');
+                    if (results.data && results.data.length > 0) {
+                        parseCSVRows(results.data);
+                    }
+                },
+                error: function(err) {
+                    if (spinner) spinner.classList.remove('animate-spin');
+                    console.warn('Google Sheet Sync Error, falling back to local data:', err);
+                }
+            });
+        }
+
+        function parseCSVRows(rows) {
+            rows.forEach(row => {
+                const date = row['日期'] || row['Date'];
+                const habitName = row['習慣名稱'] || row['習慣'] || row['Habit'];
+                const status = row['狀態'] || row['Status'] || row['完成狀態'];
+                const note = row['備註'] || row['心得'] || row['Note'] || '';
+
+                const role = row['角色'] || row['Role'];
+                const task = row['週任務'] || row['每週事項'] || row['Task'];
+
+                if (date && habitName) {
+                    const normStatus = (status === '完成' || status === 'TRUE' || status === '1') ? '完成' : '未完成';
+                    const idx = dailyRecords.findIndex(r => r.date === date && r.habitName === habitName);
+                    if (idx >= 0) {
+                        dailyRecords[idx].status = normStatus;
+                        if (note) dailyRecords[idx].note = note;
+                    } else {
+                        dailyRecords.push({
+                            id: Date.now() + Math.random(),
+                            date: date,
+                            habitName: habitName,
+                            status: normStatus,
+                            note: note
+                        });
+                    }
+                }
+
+                if (role && task) {
+                    const normStatus = (status === '完成' || status === 'TRUE') ? '完成' : '未完成';
+                    const idx = roleTasks.findIndex(t => t.role === role && t.task === task);
+                    if (idx >= 0) {
+                        roleTasks[idx].status = normStatus;
+                    } else {
+                        roleTasks.push({
+                            id: Date.now() + Math.random(),
+                            role: role,
+                            task: task,
+                            status: normStatus
+                        });
+                    }
+                }
+            });
+
+            saveDataLocally();
+            renderTodayCheckinGrid();
+            renderRoleTasksView();
+            updateHeaderRankBadge();
+        }
+
+        // ==========================================
+        // INITIALIZATION
+        // ==========================================
+        document.addEventListener('DOMContentLoaded', () => {
+            const picker = document.getElementById('checkinDatePicker');
+            if (picker) picker.value = getTodayString();
+
+            loadDataLocally();
+            renderTodayCheckinGrid();
+            renderRoleTasksView();
+            updateHeaderRankBadge();
+            safeIcons();
+
+            // Fetch Google Sheet CSV data on initial load
+            syncSheetData();
+        });
+    </script>
+</body>
+</html>
